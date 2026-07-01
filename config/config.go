@@ -25,17 +25,18 @@ type Config[T any] struct {
 }
 
 type Base struct {
-	App      AppConfig      `yaml:"app" mapstructure:"app"`
-	Server   ServerConfig   `yaml:"server" mapstructure:"server"`
-	Database DatabaseConfig `yaml:"database" mapstructure:"database"`
-	Redis    RedisConfig    `yaml:"redis" mapstructure:"redis"`
-	JWT      JWTConfig      `yaml:"jwt" mapstructure:"jwt"`
-	Tracing  TracingConfig  `yaml:"tracing" mapstructure:"tracing"`
-	Logger   LoggerConfig   `yaml:"logger" mapstructure:"logger"`
-	GRPC     GRPCConfig     `yaml:"grpc" mapstructure:"grpc"`
-	NATS     NATSConfig     `yaml:"nats" mapstructure:"nats"`
-	Asynq    AsynqConfig    `yaml:"asynq" mapstructure:"asynq"`
-	Mail     MailConfig     `yaml:"mail" mapstructure:"mail"`
+	App         AppConfig         `yaml:"app" mapstructure:"app"`
+	Server      ServerConfig      `yaml:"server" mapstructure:"server"`
+	Database    DatabaseConfig    `yaml:"database" mapstructure:"database"`
+	Redis       RedisConfig       `yaml:"redis" mapstructure:"redis"`
+	JWT         JWTConfig         `yaml:"jwt" mapstructure:"jwt"`
+	Tracing     TracingConfig     `yaml:"tracing" mapstructure:"tracing"`
+	Logger      LoggerConfig      `yaml:"logger" mapstructure:"logger"`
+	GRPC        GRPCConfig        `yaml:"grpc" mapstructure:"grpc"`
+	NATS        NATSConfig        `yaml:"nats" mapstructure:"nats"`
+	Asynq       AsynqConfig       `yaml:"asynq" mapstructure:"asynq"`
+	Mail        MailConfig        `yaml:"mail" mapstructure:"mail"`
+	GRPCClients GRPCClientsConfig `yaml:"grpc_clients" mapstructure:"grpc_clients"`
 }
 
 type AppConfig struct {
