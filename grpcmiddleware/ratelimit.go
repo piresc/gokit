@@ -1,0 +1,46 @@
+package grpcmiddleware
+
+import (
+	"context"
+	"net"
+
+	"github.com/piresc/gokit/ratelimit"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
+)
+
+// RateLimitConfig aliases ratelimit.Config for convenience.
+type RateLimitConfig = ratelimit.Config
+
+// RateLimitUnaryInterceptor enforces per-client-IP rate limiting using a
+// token-bucket store. The store is lazily initialised on first call.
+func (i *Interceptors) RateLimitUnaryInterceptor(cfg RateLimitConfig) grpc.UnaryServerInterceptor {
+	store := ratelimit.NewStore(cfg)
+	i.rateLimitStore = store
+
+	return func(
+		ctx context.Context,
+		req interface{},
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (interface{}, error) {
+		key := "unknown"
+		if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
+			host, _, err := net.SplitHostPort(p.Addr.String())
+			if err != nil {
+				key = p.Addr.String()
+			} else {
+				key = host
+			}
+		}
+
+		if !store.Allow(key) {
+			return nil, status.Errorf(codes.ResourceExhausted, "rate limit exceeded")
+		}
+
+		return handler(ctx, req)
+	}
+}
