@@ -142,7 +142,11 @@ func (a *HTTPApp[T]) Run() error {
 	if err := a.srv.Start(); err != nil {
 		return fmt.Errorf("http server: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeout := 30 * time.Second
+	if a.Config.Server.ShutdownTimeout > 0 {
+		timeout = time.Duration(a.Config.Server.ShutdownTimeout) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return a.Shutdown(ctx)
 }
