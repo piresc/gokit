@@ -74,7 +74,9 @@ func TestCache_Concurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = Parse("1.2.3")
+			ok, err := LessThanOrEqual("1.2.3", "2.0.0")
+			assert.NoError(t, err)
+			assert.True(t, ok)
 		}()
 	}
 	wg.Wait()
