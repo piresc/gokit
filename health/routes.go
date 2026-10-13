@@ -1,23 +1,20 @@
 package health
 
 import (
+	"encoding/json"
 	"net/http"
 	"runtime"
-
-	"github.com/gin-gonic/gin"
 )
 
-// RegisterRoutes mounts health endpoints on the given engine:
+// RegisterRoutes mounts health endpoints on the given mux:
 //
 //	GET /health          — shallow check (service metadata)
 //	GET /health/live     — liveness probe, always 200
 //	GET /health/ready    — readiness probe (runs all checkers)
 //	GET /health/detailed — same as /ready but always returns full detail
-func RegisterRoutes(r *gin.Engine, serviceName, version string, svc *Service) {
-	g := r.Group("/health")
-
-	g.GET("", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
+func RegisterRoutes(mux *http.ServeMux, serviceName, version string, svc *Service) {
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			KeyStatus:      "ok",
 			"service_name": serviceName,
 			"version":      version,
@@ -25,39 +22,45 @@ func RegisterRoutes(r *gin.Engine, serviceName, version string, svc *Service) {
 		})
 	})
 
-	g.GET("/live", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{KeyStatus: "ok"})
+	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{KeyStatus: "ok"})
 	})
 
-	g.GET("/ready", func(c *gin.Context) {
-		result, err := svc.CheckAll(c.Request.Context())
+	mux.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
+		result, err := svc.CheckAll(r.Context())
 		if err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
+			writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
 				KeyStatus: StatusUnhealthy,
 				"error":   err.Error(),
 			})
 			return
 		}
 		if s, _ := result[KeyStatus].(string); s != StatusHealthy {
-			c.JSON(http.StatusServiceUnavailable, result)
+			writeJSON(w, http.StatusServiceUnavailable, result)
 			return
 		}
-		c.JSON(http.StatusOK, result)
+		writeJSON(w, http.StatusOK, result)
 	})
 
-	g.GET("/detailed", func(c *gin.Context) {
-		result, err := svc.CheckAll(c.Request.Context())
+	mux.HandleFunc("GET /health/detailed", func(w http.ResponseWriter, r *http.Request) {
+		result, err := svc.CheckAll(r.Context())
 		if err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
+			writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
 				KeyStatus: StatusUnhealthy,
 				"error":   err.Error(),
 			})
 			return
 		}
 		if s, _ := result[KeyStatus].(string); s != StatusHealthy {
-			c.JSON(http.StatusServiceUnavailable, result)
+			writeJSON(w, http.StatusServiceUnavailable, result)
 			return
 		}
-		c.JSON(http.StatusOK, result)
+		writeJSON(w, http.StatusOK, result)
 	})
+}
+
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
 }

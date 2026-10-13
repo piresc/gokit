@@ -1,10 +1,9 @@
 package httperror
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
 
 	"github.com/piresc/gokit/apperror"
 )
@@ -15,24 +14,18 @@ type errorResponse struct {
 	RequestID string `json:"request_id,omitempty"`
 }
 
-func Write(c *gin.Context, err error) {
-	WriteWithRequestID(c, err, "")
-}
+func Write(w http.ResponseWriter, err error) { WriteWithRequestID(w, err, "") }
 
-func WriteWithRequestID(c *gin.Context, err error, requestID string) {
+func WriteWithRequestID(w http.ResponseWriter, err error, requestID string) {
+	w.Header().Set("Content-Type", "application/json")
+
 	var appErr *apperror.AppError
 	if errors.As(err, &appErr) {
-		c.JSON(appErr.HTTPStatus, errorResponse{
-			Status:    "error",
-			Error:     appErr.Message,
-			RequestID: requestID,
-		})
+		w.WriteHeader(appErr.HTTPStatus)
+		json.NewEncoder(w).Encode(errorResponse{Status: "error", Error: appErr.Message, RequestID: requestID})
 		return
 	}
 
-	c.JSON(http.StatusInternalServerError, errorResponse{
-		Status:    "error",
-		Error:     err.Error(),
-		RequestID: requestID,
-	})
+	w.WriteHeader(http.StatusInternalServerError)
+	json.NewEncoder(w).Encode(errorResponse{Status: "error", Error: err.Error(), RequestID: requestID})
 }

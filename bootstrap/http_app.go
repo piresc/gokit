@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	"google.golang.org/grpc"
 
@@ -34,14 +34,15 @@ type HTTPApp[T any] struct {
 	Logger      *slog.Logger
 	Tracer      tracing.Tracer
 	Config      *config.Config[T]
-	Engine      *gin.Engine
+	// Mux is the underlying router; register application routes here.
+	Mux *http.ServeMux
 
 	base *baseApp
 	srv  *server.GracefulServer
 }
 
-// NewHTTPService loads config, wires all configured infrastructure, and
-// builds a Gin engine with the standard middleware chain.
+// NewHTTPService loads config, wires all configured infrastructure, and builds
+// an http.ServeMux with the standard middleware chain.
 //
 // Health routes (/health/live, /health/ready) are auto-registered.
 func NewHTTPService[T any](serviceName string) (*HTTPApp[T], error) {
@@ -62,26 +63,7 @@ func NewHTTPService[T any](serviceName string) (*HTTPApp[T], error) {
 		base:        base,
 	}
 
-	gin.SetMode(gin.ReleaseMode)
-	engine := gin.New()
-
-	mw := middleware.NewMiddleware(base.log, base.tracer)
-	engine.Use(
-		mw.RecoveryHandler(),
-		mw.SecurityHeaders(),
-	)
-	if base.appMetrics != nil {
-		engine.Use(base.appMetrics.HTTPMiddleware())
-	}
-	allowedOrigins := cfg.Server.AllowedOrigins
-	if len(allowedOrigins) == 0 {
-		allowedOrigins = []string{"*"}
-	}
-	engine.Use(
-		mw.CorsHandler(allowedOrigins),
-		mw.RateLimiter(middleware.DefaultRateLimitConfig()),
-		mw.TracingHandler(),
-	)
+	mux := http.NewServeMux()
 
 	// Auto-register health checks for connected dependencies.
 	healthSvc := health.NewService(base.log)
@@ -91,14 +73,32 @@ func NewHTTPService[T any](serviceName string) (*HTTPApp[T], error) {
 	if base.redis != nil {
 		healthSvc.AddChecker("redis", health.NewRedisChecker(base.redis))
 	}
-	health.RegisterRoutes(engine, cfg.App.Name, cfg.App.Version, healthSvc)
+	health.RegisterRoutes(mux, cfg.App.Name, cfg.App.Version, healthSvc)
+
+	// Build middleware chain (outermost first).
+	mw := middleware.NewMiddleware(base.log, base.tracer)
+
+	allowedOrigins := cfg.Server.AllowedOrigins
+	if len(allowedOrigins) == 0 {
+		allowedOrigins = []string{"*"}
+	}
+
+	var handler http.Handler = mux
+	handler = mw.TracingHandler()(handler)
+	handler = mw.RateLimiter(middleware.DefaultRateLimitConfig())(handler)
+	handler = mw.CorsHandler(allowedOrigins)(handler)
+	if base.appMetrics != nil {
+		handler = base.appMetrics.HTTPMiddleware()(handler)
+	}
+	handler = mw.SecurityHeaders()(handler)
+	handler = mw.RecoveryHandler()(handler)
 
 	shutdownTimeout := time.Duration(cfg.Server.ShutdownTimeout) * time.Second
 	if shutdownTimeout == 0 {
 		shutdownTimeout = 30 * time.Second
 	}
-	app.Engine = engine
-	app.srv = server.NewGracefulServer(engine, base.log, cfg.Server.Port, shutdownTimeout)
+	app.Mux = mux
+	app.srv = server.NewGracefulServer(handler, base.log, cfg.Server.Port, shutdownTimeout)
 
 	return app, nil
 }

@@ -9,23 +9,20 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
-// GracefulServer wraps an HTTP server backed by a Gin engine and handles
-// SIGINT/SIGTERM for graceful shutdown.
+// GracefulServer wraps an HTTP server and handles SIGINT/SIGTERM for graceful shutdown.
 type GracefulServer struct {
-	engine          *gin.Engine
+	handler         http.Handler
 	logger          *slog.Logger
 	port            int
 	shutdownTimeout time.Duration
 }
 
 // NewGracefulServer constructs a GracefulServer.
-func NewGracefulServer(engine *gin.Engine, logger *slog.Logger, port int, shutdownTimeout time.Duration) *GracefulServer {
+func NewGracefulServer(handler http.Handler, logger *slog.Logger, port int, shutdownTimeout time.Duration) *GracefulServer {
 	return &GracefulServer{
-		engine:          engine,
+		handler:         handler,
 		logger:          logger,
 		port:            port,
 		shutdownTimeout: shutdownTimeout,
@@ -37,7 +34,7 @@ func NewGracefulServer(engine *gin.Engine, logger *slog.Logger, port int, shutdo
 func (s *GracefulServer) Start() error {
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.port),
-		Handler:           s.engine,
+		Handler:           s.handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

@@ -2,19 +2,17 @@ package middleware_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/piresc/gokit/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func init() { gin.SetMode(gin.TestMode) }
 
 const testSecret = "test-secret-key"
 
@@ -32,82 +30,99 @@ func newMiddleware() *middleware.Middleware {
 	return middleware.NewMiddleware(nil, nil)
 }
 
-func performRequest(r http.Handler, method, path string, headers map[string]string) *httptest.ResponseRecorder {
+// chain wraps h with each middleware in order (first middleware is outermost).
+func chain(h http.Handler, mw ...func(http.Handler) http.Handler) http.Handler {
+	for i := len(mw) - 1; i >= 0; i-- {
+		h = mw[i](h)
+	}
+	return h
+}
+
+func performRequest(h http.Handler, method, path string, headers map[string]string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, nil)
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	h.ServeHTTP(w, req)
 	return w
 }
 
 // ---- JWTAuth ----
 
 func TestJWTAuth_Valid(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
-	r.GET("/", m.JWTAuth(testSecret), func(c *gin.Context) {
-		uid, _ := c.Get(middleware.KeyUserID)
-		c.String(http.StatusOK, uid.(string))
-	})
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, middleware.GetUserID(r))
+		}),
+		m.JWTAuth(testSecret),
+	)
 
 	token := makeToken("user-1", "admin")
-	w := performRequest(r, "GET", "/", map[string]string{"Authorization": "Bearer " + token})
+	w := performRequest(h, "GET", "/", map[string]string{"Authorization": "Bearer " + token})
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "user-1", w.Body.String())
 }
 
 func TestJWTAuth_Missing(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
-	r.GET("/", m.JWTAuth(testSecret), func(c *gin.Context) { c.Status(200) })
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.JWTAuth(testSecret),
+	)
 
-	w := performRequest(r, "GET", "/", nil)
+	w := performRequest(h, "GET", "/", nil)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestJWTAuth_Invalid(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
-	r.GET("/", m.JWTAuth(testSecret), func(c *gin.Context) { c.Status(200) })
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.JWTAuth(testSecret),
+	)
 
-	w := performRequest(r, "GET", "/", map[string]string{"Authorization": "Bearer bad.token"})
+	w := performRequest(h, "GET", "/", map[string]string{"Authorization": "Bearer bad.token"})
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestJWTAuth_WrongFormat(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
-	r.GET("/", m.JWTAuth(testSecret), func(c *gin.Context) { c.Status(200) })
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.JWTAuth(testSecret),
+	)
 
-	w := performRequest(r, "GET", "/", map[string]string{"Authorization": "Basic something"})
+	w := performRequest(h, "GET", "/", map[string]string{"Authorization": "Basic something"})
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 // ---- RequireRole ----
 
 func TestRequireRole_Allowed(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
-	r.GET("/", m.JWTAuth(testSecret), m.RequireRole("admin"), func(c *gin.Context) {
-		c.Status(http.StatusOK)
-	})
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.JWTAuth(testSecret),
+		m.RequireRole("admin"),
+	)
 
-	w := performRequest(r, "GET", "/", map[string]string{
+	w := performRequest(h, "GET", "/", map[string]string{
 		"Authorization": "Bearer " + makeToken("u1", "admin"),
 	})
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestRequireRole_Forbidden(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
-	r.GET("/", m.JWTAuth(testSecret), m.RequireRole("admin"), func(c *gin.Context) {
-		c.Status(http.StatusOK)
-	})
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.JWTAuth(testSecret),
+		m.RequireRole("admin"),
+	)
 
-	w := performRequest(r, "GET", "/", map[string]string{
+	w := performRequest(h, "GET", "/", map[string]string{
 		"Authorization": "Bearer " + makeToken("u2", "user"),
 	})
 	assert.Equal(t, http.StatusForbidden, w.Code)
@@ -116,11 +131,13 @@ func TestRequireRole_Forbidden(t *testing.T) {
 // ---- SecurityHeaders ----
 
 func TestSecurityHeaders(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
-	r.GET("/", m.SecurityHeaders(), func(c *gin.Context) { c.Status(200) })
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.SecurityHeaders(),
+	)
 
-	w := performRequest(r, "GET", "/", nil)
+	w := performRequest(h, "GET", "/", nil)
 	assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
 	assert.Equal(t, "DENY", w.Header().Get("X-Frame-Options"))
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
@@ -129,48 +146,55 @@ func TestSecurityHeaders(t *testing.T) {
 // ---- Recovery ----
 
 func TestRecovery_Returns500(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
-	r.GET("/panic", m.RecoveryHandler(), func(c *gin.Context) { panic("test panic") })
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { panic("test panic") }),
+		m.RecoveryHandler(),
+	)
 
-	w := performRequest(r, "GET", "/panic", nil)
+	w := performRequest(h, "GET", "/panic", nil)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 // ---- RateLimiter ----
 
 func TestRateLimiter_Allow(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
 	cfg := middleware.RateLimitConfig{RequestsPerSecond: 100, BurstSize: 10}
-	r.GET("/", m.RateLimiter(cfg), func(c *gin.Context) { c.Status(200) })
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.RateLimiter(cfg),
+	)
 
-	w := performRequest(r, "GET", "/", nil)
+	w := performRequest(h, "GET", "/", nil)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestRateLimiter_Reject(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
 	cfg := middleware.RateLimitConfig{RequestsPerSecond: 1, BurstSize: 1}
-	r.GET("/", m.RateLimiter(cfg), func(c *gin.Context) { c.Status(200) })
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.RateLimiter(cfg),
+	)
 
-	performRequest(r, "GET", "/", nil) // consume burst
-	w := performRequest(r, "GET", "/", nil)
+	performRequest(h, "GET", "/", nil) // consume burst
+	w := performRequest(h, "GET", "/", nil)
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 }
 
 // ---- SetContextValues ----
 
 func TestSetContextValues(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
-	r.GET("/", m.SetContextValues(), func(c *gin.Context) {
-		tid, _ := c.Get(middleware.KeyTransactionID)
-		c.String(http.StatusOK, tid.(string))
-	})
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, middleware.GetTransactionID(r))
+		}),
+		m.SetContextValues(),
+	)
 
-	w := performRequest(r, "GET", "/", map[string]string{"transactionid": "txn-abc"})
+	w := performRequest(h, "GET", "/", map[string]string{"transactionid": "txn-abc"})
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "txn-abc", w.Body.String())
 }
@@ -193,11 +217,13 @@ func TestShutdown_Safe(t *testing.T) {
 // ---- error body shape ----
 
 func TestJWTAuth_ErrorBody(t *testing.T) {
-	r := gin.New()
 	m := newMiddleware()
-	r.GET("/", m.JWTAuth(testSecret), func(c *gin.Context) { c.Status(200) })
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.JWTAuth(testSecret),
+	)
 
-	w := performRequest(r, "GET", "/", nil)
+	w := performRequest(h, "GET", "/", nil)
 	var body map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	assert.Equal(t, "error", body["status"])

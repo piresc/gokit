@@ -2,24 +2,24 @@ package metrics
 
 import (
 	"fmt"
+	"net/http"
 	"regexp"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 )
 
 type responseWriter struct {
-	gin.ResponseWriter
+	http.ResponseWriter
 	statusCode int
 	size       int
 }
 
-func newResponseWriter(w gin.ResponseWriter) *responseWriter {
+func newResponseWriter(w http.ResponseWriter) *responseWriter {
 	return &responseWriter{
 		ResponseWriter: w,
-		statusCode:     200,
+		statusCode:     http.StatusOK,
 	}
 }
 
@@ -77,38 +77,34 @@ func joinPath(parts []string) string {
 	return result
 }
 
-func (m *Metrics) HTTPMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
+// HTTPMiddleware returns a middleware that records HTTP request metrics.
+func (m *Metrics) HTTPMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
 
-		rw := newResponseWriter(c.Writer)
-		c.Writer = rw
+			rw := newResponseWriter(w)
+			next.ServeHTTP(rw, r)
 
-		c.Next()
+			duration := time.Since(start).Seconds()
+			method := r.Method
+			path := normalizePath(r.URL.Path)
+			statusCode := fmt.Sprintf("%d", rw.statusCode)
 
-		duration := time.Since(start).Seconds()
-		method := c.Request.Method
+			attrs := otelmetric.WithAttributes(
+				attribute.String("method", method),
+				attribute.String("path", path),
+				attribute.String("status_code", statusCode),
+			)
 
-		path := c.FullPath()
-		if path == "" {
-			path = normalizePath(c.Request.URL.Path)
-		}
+			m.HTTPRequestsTotal.Add(r.Context(), 1, attrs)
+			m.HTTPRequestDuration.Record(r.Context(), duration, attrs)
 
-		statusCode := fmt.Sprintf("%d", rw.statusCode)
-
-		attrs := otelmetric.WithAttributes(
-			attribute.String("method", method),
-			attribute.String("path", path),
-			attribute.String("status_code", statusCode),
-		)
-
-		m.HTTPRequestsTotal.Add(c.Request.Context(), 1, attrs)
-		m.HTTPRequestDuration.Record(c.Request.Context(), duration, attrs)
-
-		sizeAttrs := otelmetric.WithAttributes(
-			attribute.String("method", method),
-			attribute.String("path", path),
-		)
-		m.HTTPResponseSize.Record(c.Request.Context(), int64(rw.size), sizeAttrs)
+			sizeAttrs := otelmetric.WithAttributes(
+				attribute.String("method", method),
+				attribute.String("path", path),
+			)
+			m.HTTPResponseSize.Record(r.Context(), int64(rw.size), sizeAttrs)
+		})
 	}
 }

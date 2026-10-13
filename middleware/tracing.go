@@ -5,9 +5,23 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// statusWriter wraps http.ResponseWriter to capture the written status code.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (sw *statusWriter) WriteHeader(code int) {
+	sw.status = code
+	sw.ResponseWriter.WriteHeader(code)
+}
+
+func newStatusWriter(w http.ResponseWriter) *statusWriter {
+	return &statusWriter{ResponseWriter: w, status: http.StatusOK}
+}
 
 func traceFromContext(ctx context.Context) string {
 	span := trace.SpanFromContext(ctx)
@@ -22,39 +36,40 @@ func traceFromContext(ctx context.Context) string {
 }
 
 // TracingHandler starts an OTel segment for each request, injects the trace ID
-// into the response header, and records the HTTP status code and any errors.
-func (m *Middleware) TracingHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		path := c.Request.URL.Path
+// into the response header, and records the HTTP status code.
+func (m *Middleware) TracingHandler() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			path := r.URL.Path
 
-		if !m.tracer.ShouldTrace(path) {
-			c.Next()
-			return
-		}
-
-		ctx, txn := m.tracer.StartHTTPRequest(c.Request)
-		c.Request = c.Request.WithContext(ctx)
-
-		if spanID := traceFromContext(ctx); spanID != "" {
-			c.Header("X-Trace-Id", spanID)
-		}
-
-		txn.SetName(fmt.Sprintf("%s %s", c.Request.Method, c.FullPath()))
-		txn.AddAttribute("http.method", c.Request.Method)
-		txn.AddAttribute("http.url", c.Request.RequestURI)
-		txn.AddAttribute("http.route", c.FullPath())
-		txn.AddAttribute("http.user_agent", c.Request.UserAgent())
-
-		defer func() {
-			txn.AddAttribute("http.status_code", fmt.Sprintf("%d", c.Writer.Status()))
-			if c.Writer.Status() >= http.StatusInternalServerError {
-				for _, err := range c.Errors {
-					txn.AddError(err.Err)
-				}
+			if !m.tracer.ShouldTrace(path) {
+				next.ServeHTTP(w, r)
+				return
 			}
-			txn.End()
-		}()
 
-		c.Next()
+			ctx, txn := m.tracer.StartHTTPRequest(r)
+			r = r.WithContext(ctx)
+
+			if spanID := traceFromContext(ctx); spanID != "" {
+				w.Header().Set("X-Trace-Id", spanID)
+			}
+
+			txn.SetName(fmt.Sprintf("%s %s", r.Method, path))
+			txn.AddAttribute("http.method", r.Method)
+			txn.AddAttribute("http.url", r.RequestURI)
+			txn.AddAttribute("http.route", path)
+			txn.AddAttribute("http.user_agent", r.UserAgent())
+
+			sw := newStatusWriter(w)
+			defer func() {
+				txn.AddAttribute("http.status_code", fmt.Sprintf("%d", sw.status))
+				if sw.status >= http.StatusInternalServerError {
+					txn.AddError(fmt.Errorf("http error: status %d", sw.status))
+				}
+				txn.End()
+			}()
+
+			next.ServeHTTP(sw, r)
+		})
 	}
 }

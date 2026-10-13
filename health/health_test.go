@@ -8,13 +8,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"github.com/piresc/gokit/health"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func init() { gin.SetMode(gin.TestMode) }
 
 // ---- stub checker ----
 
@@ -53,50 +50,50 @@ func TestService_Empty(t *testing.T) {
 
 // ---- Routes ----
 
-func newEngine(svc *health.Service) *gin.Engine {
-	r := gin.New()
-	health.RegisterRoutes(r, "test-svc", "v1.0.0", svc)
-	return r
+func newMux(svc *health.Service) *http.ServeMux {
+	mux := http.NewServeMux()
+	health.RegisterRoutes(mux, "test-svc", "v1.0.0", svc)
+	return mux
 }
 
-func getPath(engine *gin.Engine, path string) *httptest.ResponseRecorder {
+func getPath(mux *http.ServeMux, path string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	w := httptest.NewRecorder()
-	engine.ServeHTTP(w, req)
+	mux.ServeHTTP(w, req)
 	return w
 }
 
 func TestRoutes_Shallow(t *testing.T) {
-	r := newEngine(health.NewService(nil))
-	w := getPath(r, "/health")
+	mux := newMux(health.NewService(nil))
+	w := getPath(mux, "/health")
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestRoutes_Live(t *testing.T) {
-	r := newEngine(health.NewService(nil))
-	w := getPath(r, "/health/live")
+	mux := newMux(health.NewService(nil))
+	w := getPath(mux, "/health/live")
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestRoutes_Ready_Healthy(t *testing.T) {
 	svc := health.NewService(nil)
 	svc.AddChecker("ok", &stubChecker{name: "ok"})
-	r := newEngine(svc)
-	w := getPath(r, "/health/ready")
+	mux := newMux(svc)
+	w := getPath(mux, "/health/ready")
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestRoutes_Ready_Unhealthy(t *testing.T) {
 	svc := health.NewService(nil)
 	svc.AddChecker("broken", &stubChecker{name: "broken", err: errors.New("dead")})
-	r := newEngine(svc)
-	w := getPath(r, "/health/ready")
+	mux := newMux(svc)
+	w := getPath(mux, "/health/ready")
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
 
 func TestRoutes_Detailed(t *testing.T) {
 	svc := health.NewService(nil)
-	r := newEngine(svc)
-	w := getPath(r, "/health/detailed")
+	mux := newMux(svc)
+	w := getPath(mux, "/health/detailed")
 	assert.Equal(t, http.StatusOK, w.Code)
 }

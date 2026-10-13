@@ -6,19 +6,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/piresc/gokit/apperror"
 	"github.com/piresc/gokit/httperror"
 )
 
-func init() { gin.SetMode(gin.TestMode) }
-
 func TestWrite_AppError(t *testing.T) {
 	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	httperror.Write(c, apperror.NotFound("user not found"))
+	httperror.Write(w, apperror.NotFound("user not found"))
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("want 404, got %d", w.Code)
@@ -35,9 +29,7 @@ func TestWrite_AppError(t *testing.T) {
 
 func TestWrite_GenericError(t *testing.T) {
 	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	httperror.Write(c, apperror.ErrInternal)
+	httperror.Write(w, apperror.ErrInternal)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", w.Code)

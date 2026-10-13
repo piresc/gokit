@@ -4,19 +4,17 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"github.com/piresc/gokit/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func init() { gin.SetMode(gin.TestMode) }
-
 func TestNewGracefulServer_NotNil(t *testing.T) {
-	engine := gin.New()
-	srv := server.NewGracefulServer(engine, slog.Default(), 8080, 0)
+	mux := http.NewServeMux()
+	srv := server.NewGracefulServer(mux, slog.Default(), 8080, 0)
 	require.NotNil(t, srv)
 }
 
