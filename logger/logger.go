@@ -22,14 +22,15 @@ func (h *otelHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (h *otelHandler) Handle(ctx context.Context, r slog.Record) error {
-	if ctx != nil {
-		span := trace.SpanFromContext(ctx)
-		if sc := span.SpanContext(); sc.IsValid() {
-			r.AddAttrs(
-				slog.String("trace_id", sc.TraceID().String()),
-				slog.String("span_id", sc.SpanID().String()),
-			)
-		}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	span := trace.SpanFromContext(ctx)
+	if span.SpanContext().IsValid() {
+		r.AddAttrs(
+			slog.String("trace_id", span.SpanContext().TraceID().String()),
+			slog.String("span_id", span.SpanContext().SpanID().String()),
+		)
 	}
 	return h.base.Handle(ctx, r)
 }
@@ -57,14 +58,15 @@ func (f *fanoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (f *fanoutHandler) Handle(ctx context.Context, r slog.Record) error {
+	var firstErr error
 	for _, h := range f.handlers {
 		if h.Enabled(ctx, r.Level) {
-			if err := h.Handle(ctx, r.Clone()); err != nil {
-				return err
+			if err := h.Handle(ctx, r.Clone()); err != nil && firstErr == nil {
+				firstErr = err
 			}
 		}
 	}
-	return nil
+	return firstErr
 }
 
 func (f *fanoutHandler) WithAttrs(attrs []slog.Attr) slog.Handler {

@@ -88,3 +88,10 @@ func TestPrereleaseOrdering(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, r)
 }
+
+func TestPrereleaseNumericOrdering(t *testing.T) {
+	// rc.10 > rc.9 numerically
+	r, err := Compare("1.0.0-rc.10", "1.0.0-rc.9")
+	require.NoError(t, err)
+	assert.Equal(t, 1, r)
+}

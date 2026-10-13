@@ -179,10 +179,29 @@ func compareInt(a, b int) int {
 
 func comparePrerelease(a, b string) int {
 	if a == "" && b != "" {
-		return 1
+		return 1 // release > prerelease
 	}
 	if a != "" && b == "" {
-		return -1
+		return -1 // prerelease < release
 	}
-	return strings.Compare(a, b)
+	if a == b {
+		return 0
+	}
+
+	partsA := strings.Split(a, ".")
+	partsB := strings.Split(b, ".")
+	for i := 0; i < len(partsA) && i < len(partsB); i++ {
+		na, errA := strconv.Atoi(partsA[i])
+		nb, errB := strconv.Atoi(partsB[i])
+		if errA == nil && errB == nil {
+			if r := compareInt(na, nb); r != 0 {
+				return r
+			}
+		} else {
+			if r := strings.Compare(partsA[i], partsB[i]); r != 0 {
+				return r
+			}
+		}
+	}
+	return compareInt(len(partsA), len(partsB))
 }

@@ -88,12 +88,8 @@ func (c *Client) Do(ctx context.Context, method, endpoint string, body any) (*ht
 			endSegment()
 		}
 
+		// 2xx, 3xx, and 4xx are returned immediately — only 5xx and transport errors retry.
 		if err == nil && resp.StatusCode < 500 {
-			return resp, nil
-		}
-
-		// Return 4xx immediately — no retry.
-		if resp != nil && resp.StatusCode >= 400 && resp.StatusCode < 500 {
 			return resp, nil
 		}
 

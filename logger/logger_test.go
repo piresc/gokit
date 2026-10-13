@@ -69,6 +69,28 @@ func TestFanoutHandler_DispatchesToAll(t *testing.T) {
 	assert.Contains(t, buf2.String(), "hello")
 }
 
+func TestFanoutHandler_ContinuesAfterError(t *testing.T) {
+	// If the first handler errors, the second handler must still receive the record.
+	var buf2 bytes.Buffer
+	errHandler := &errorHandler{}
+	h2 := slog.NewJSONHandler(&buf2, nil)
+	fh := &fanoutHandler{handlers: []slog.Handler{errHandler, h2}}
+	r := slog.NewRecord(time.Now(), slog.LevelInfo, "world", 0)
+	err := fh.Handle(context.Background(), r)
+	assert.Error(t, err)
+	assert.Contains(t, buf2.String(), "world")
+}
+
+// errorHandler is a slog.Handler that always returns an error from Handle.
+type errorHandler struct{}
+
+func (e *errorHandler) Enabled(_ context.Context, _ slog.Level) bool { return true }
+func (e *errorHandler) Handle(_ context.Context, _ slog.Record) error {
+	return assert.AnError
+}
+func (e *errorHandler) WithAttrs(_ []slog.Attr) slog.Handler  { return e }
+func (e *errorHandler) WithGroup(_ string) slog.Handler       { return e }
+
 func TestNewLoggerWithProvider_NilProvider(t *testing.T) {
 	cfg := config.LoggerConfig{Level: "info", Format: "json"}
 	log := NewLoggerWithProvider(cfg, nil)
