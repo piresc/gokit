@@ -3,6 +3,7 @@ package nats
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -141,32 +142,20 @@ func (c *Client) RecreateConsumer(ctx context.Context, streamName string, cfg je
 		if err != nil {
 			return fmt.Errorf("get stream %s: %w", streamName, err)
 		}
-		c.mu.Lock()
-		c.streams[streamName] = stream
-		c.mu.Unlock()
 	}
 
 	// Delete the consumer if it already exists; ignore not-found.
-	if err := stream.DeleteConsumer(ctx, cfg.Name); err != nil && !isConsumerNotFound(err) {
+	if err := stream.DeleteConsumer(ctx, cfg.Name); err != nil && !errors.Is(err, jetstream.ErrConsumerNotFound) {
 		return fmt.Errorf("delete consumer %s on stream %s: %w", cfg.Name, streamName, err)
 	}
 
-	consumer, err := stream.CreateOrUpdateConsumer(ctx, cfg)
-	if err != nil {
-		return fmt.Errorf("recreate consumer %s on stream %s: %w", cfg.Name, streamName, err)
+	// Delegate to CreateConsumer — avoids duplicating stream resolution and caching logic.
+	if _, err := c.CreateConsumer(ctx, streamName, cfg); err != nil {
+		return err
 	}
-
-	c.mu.Lock()
-	c.consumers[cfg.Name] = consumer
-	c.mu.Unlock()
 
 	slog.Info("consumer recreated", "name", cfg.Name, "stream", streamName)
 	return nil
-}
-
-// isConsumerNotFound reports whether err represents a missing consumer.
-func isConsumerNotFound(err error) bool {
-	return err != nil && err.Error() == jetstream.ErrConsumerNotFound.Error()
 }
 
 // Close flushes and closes the NATS connection.
