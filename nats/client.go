@@ -128,6 +128,47 @@ func (c *Client) Consume(consumerName string, handler func(jetstream.Msg)) (jets
 	return cc, nil
 }
 
+// RecreateConsumer deletes the named consumer if it exists, then creates it fresh.
+// Useful to enforce DeliverNewPolicy across service restarts.
+func (c *Client) RecreateConsumer(ctx context.Context, streamName string, cfg jetstream.ConsumerConfig) error {
+	c.mu.RLock()
+	stream, ok := c.streams[streamName]
+	c.mu.RUnlock()
+
+	if !ok {
+		var err error
+		stream, err = c.js.Stream(ctx, streamName)
+		if err != nil {
+			return fmt.Errorf("get stream %s: %w", streamName, err)
+		}
+		c.mu.Lock()
+		c.streams[streamName] = stream
+		c.mu.Unlock()
+	}
+
+	// Delete the consumer if it already exists; ignore not-found.
+	if err := stream.DeleteConsumer(ctx, cfg.Name); err != nil && !isConsumerNotFound(err) {
+		return fmt.Errorf("delete consumer %s on stream %s: %w", cfg.Name, streamName, err)
+	}
+
+	consumer, err := stream.CreateOrUpdateConsumer(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("recreate consumer %s on stream %s: %w", cfg.Name, streamName, err)
+	}
+
+	c.mu.Lock()
+	c.consumers[cfg.Name] = consumer
+	c.mu.Unlock()
+
+	slog.Info("consumer recreated", "name", cfg.Name, "stream", streamName)
+	return nil
+}
+
+// isConsumerNotFound reports whether err represents a missing consumer.
+func isConsumerNotFound(err error) bool {
+	return err != nil && err.Error() == jetstream.ErrConsumerNotFound.Error()
+}
+
 // Close flushes and closes the NATS connection.
 func (c *Client) Close(ctx context.Context) {
 	if c.conn != nil {
