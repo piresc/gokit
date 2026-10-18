@@ -223,3 +223,17 @@ func TestWaitForHealth_ShouldReturnError_WhenServerIsUnavailable(t *testing.T) {
 	assert.Error(t, err, "should return error when server is unreachable")
 	assert.Contains(t, err.Error(), "timed out", "error should indicate timeout")
 }
+
+// TestNewRSAKeyPair_ShouldReturnParseableKeys
+func TestNewRSAKeyPair_ShouldReturnParseableKeys(t *testing.T) {
+	priv, privPEM, pubPEM := NewRSAKeyPair(t)
+
+	gotPriv, err := auth.LoadRSAPrivateKey(string(privPEM), "")
+	require.NoError(t, err)
+	assert.True(t, gotPriv.Equal(priv))
+
+	gotPub, err := auth.LoadRSAPublicKey(string(pubPEM), "")
+	require.NoError(t, err)
+	assert.True(t, gotPub.Equal(&priv.PublicKey))
+	assert.Equal(t, 2048, priv.N.BitLen())
+}
