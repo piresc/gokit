@@ -28,7 +28,7 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `nats` | NATS JetStream client + typed publisher | `NewClient(url)`, `NewPublisher(client)`, `publisher.Publish(ctx, subject, data, msgID)` |
 | `ratelimit` | Token-bucket rate-limit store (used by middleware) | `NewStore(cfg)`, `store.Allow(key)` |
 | `redis` | go-redis v9 client with OTel tracing | `NewClient(cfg)`, `client.GetClient()`, `client.Close()` |
-| `redislock` | Distributed lock via Redis | `NewLocker(client, cfg)`, `locker.Acquire(ctx, key) (Lock, error)`, `lock.Release(ctx)` |
+| `redislock` | Distributed lock via Redis | `NewLocker(client, cfg)`, `locker.Acquire(ctx, key) (*Lock, error)`, `lock.Release(ctx)` |
 | `response` | Standard JSON response envelope | `Success(w, status, data)`, `Error(w, status, msg)`, `ErrorWithRequestID(w, status, msg, reqID)` |
 | `retry` | Exponential-backoff retry helper | `Do(ctx, cfg, fn)`, `DefaultConfig()` |
 | `semver` | Semantic version parse and compare | `Parse(v)`, `MustParse(v)`, `Compare(v1, v2)`, `LessThan(v1, v2)`, `GreaterThanOrEqual(v1, v2)` |
