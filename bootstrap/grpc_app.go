@@ -114,10 +114,18 @@ func (a *GRPCApp[T]) Run() error {
 	return a.Shutdown(shutdownCtx)
 }
 
-// Shutdown gracefully stops the gRPC server and all registered infrastructure.
+// OnShutdown registers fn to run when Shutdown is called, after the gRPC server
+// stops and before any infrastructure (DB, Redis, NATS) is closed. Hooks run
+// newest-first; a failing hook is logged and does not stop the others.
+func (a *GRPCApp[T]) OnShutdown(fn func(context.Context) error) {
+	a.base.onShutdown(fn)
+}
+
+// Shutdown gracefully stops the gRPC server, runs the shutdown hooks, then
+// closes all registered infrastructure. It returns the joined errors of both.
 func (a *GRPCApp[T]) Shutdown(ctx context.Context) error {
 	if err := a.grpcServer.GracefulStop(); err != nil {
 		a.Logger.Warn("grpc graceful stop error", logger.Err(err))
 	}
-	return a.base.shutdownMgr.Shutdown(ctx)
+	return a.base.shutdown(ctx)
 }

@@ -162,7 +162,15 @@ func (a *HTTPApp[T]) Run() error {
 	return a.Shutdown(ctx)
 }
 
-// Shutdown closes all registered infrastructure components.
+// OnShutdown registers fn to run when Shutdown is called, before any
+// infrastructure (DB, Redis, NATS) is closed. Hooks run newest-first; a failing
+// hook is logged and does not stop the others.
+func (a *HTTPApp[T]) OnShutdown(fn func(context.Context) error) {
+	a.base.onShutdown(fn)
+}
+
+// Shutdown runs the shutdown hooks, then closes all registered infrastructure
+// components. It returns the joined errors of both.
 func (a *HTTPApp[T]) Shutdown(ctx context.Context) error {
-	return a.base.shutdownMgr.Shutdown(ctx)
+	return a.base.shutdown(ctx)
 }

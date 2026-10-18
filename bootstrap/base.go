@@ -4,9 +4,11 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 
 	"github.com/jmoiron/sqlx"
 	"google.golang.org/grpc"
@@ -38,6 +40,37 @@ type baseApp struct {
 	mailSender  mail.Sender
 	shutdownMgr *server.ShutdownManager
 	grpcConns   map[string]*grpc.ClientConn
+
+	hookMu sync.Mutex
+	hooks  []func(context.Context) error
+}
+
+// onShutdown registers a hook that runs before infrastructure cleanup.
+func (a *baseApp) onShutdown(fn func(context.Context) error) {
+	a.hookMu.Lock()
+	defer a.hookMu.Unlock()
+	a.hooks = append(a.hooks, fn)
+}
+
+// shutdown runs the hooks newest-first, then the infrastructure cleanup.
+// Every step runs even if an earlier one fails; all errors are joined.
+func (a *baseApp) shutdown(ctx context.Context) error {
+	a.hookMu.Lock()
+	hooks := make([]func(context.Context) error, len(a.hooks))
+	copy(hooks, a.hooks)
+	a.hookMu.Unlock()
+
+	var errs []error
+	for i := len(hooks) - 1; i >= 0; i-- {
+		if err := hooks[i](ctx); err != nil {
+			a.log.Error("shutdown hook failed", logger.Err(err))
+			errs = append(errs, err)
+		}
+	}
+	if err := a.shutdownMgr.Shutdown(ctx); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
 }
 
 // initBase loads config[T], creates a logger, and wires observability + infra.

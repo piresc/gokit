@@ -1,6 +1,6 @@
 # gokit
 
-Shared infrastructure primitives for Go services. Install with `go get github.com/piresc/gokit@v0.5.0`.
+Shared infrastructure primitives for Go services. Install with `go get github.com/piresc/gokit@v0.5.1`.
 
 ## Package reference
 
@@ -8,7 +8,7 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 |---------|-------------|---------|
 | `apperror` | Typed application errors with HTTP status codes | `New`, `BadRequest`, `NotFound`, `Forbidden`, `Conflict`, `Internal`, `ServiceUnavailable` |
 | `auth` | HS256 JWT and RS256 sign / verify, Redis token revocation | `GenerateToken(userID, role, cfg)`, `ValidateToken(token, secret)`, `LoadRSAPrivateKey(pem, path)`, `LoadRSAPublicKey(pem, path)`, `NewRSASigner(key, issuer, ttl).Sign(userID, email, role)`, `NewRSAVerifier(key).Verify(token)`, `NewRedisRevocationStore(client)` |
-| `bootstrap` | One-call service wiring — config, DB, Redis, NATS, Asynq, tracing, metrics, graceful shutdown | `NewGRPCService[T](name)`, `NewHTTPService[T](name)`, `app.GRPCConn(name)`, `app.Run()`, `app.Shutdown(ctx)` |
+| `bootstrap` | One-call service wiring — config, DB, Redis, NATS, Asynq, tracing, metrics, graceful shutdown | `NewGRPCService[T](name)`, `NewHTTPService[T](name)`, `app.GRPCConn(name)`, `app.OnShutdown(fn)`, `app.Run()`, `app.Shutdown(ctx)` |
 | `circuitbreaker` | Sony gobreaker wrapper | `New(Config)`, `cb.Execute(fn)` |
 | `config` | Generic Viper-based config loader; merges YAML + env vars | `Load[T](serviceName)`, `Config[T]{Base, Service T}` |
 | `database` | pgx/sqlx Postgres client with automatic OTel spans (only under an existing parent span). `TracedPostgresClient` is deprecated since v0.5.0 | `NewPostgresClient(cfg)`, `client.GetDB()`, `client.Ping(ctx)`, `client.Close()` |
@@ -36,6 +36,10 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `tracing` | OTel tracer factory + no-op fallback | `NewTracer(cfg) (Tracer, error)`, `NewNoOpTracer()` |
 
 > **Rate-limit client IP and trusted proxies.** The `middleware` rate limiter only honours `X-Forwarded-For` / `X-Real-IP` when the direct peer is a trusted proxy. The default trusts loopback and private ranges, which suits nginx or Traefik in Docker. When a port is published directly to clients via Docker Desktop, rootless Docker or userland-proxy, every client appears to come from a private gateway address and shares one bucket. In that case set `server.trusted_proxies: ["none"]`, or list the real proxy CIDRs.
+
+## v0.5.1 changes
+
+- Shutdown hooks that run before infrastructure closes. Register them with `app.OnShutdown(fn)` on `HTTPApp` or `GRPCApp`. Hooks run newest-first when `Shutdown` is called, before the DB, Redis and NATS connections close, so consumers and workers can stop while those are still open.
 
 ## v0.5.0 changes
 
