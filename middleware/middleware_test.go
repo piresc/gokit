@@ -183,6 +183,26 @@ func TestRateLimiter_Reject(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 }
 
+func TestRateLimiter_SeparateBucketsBehindProxy(t *testing.T) {
+	m := newMiddleware()
+	cfg := middleware.RateLimitConfig{RequestsPerSecond: 1, BurstSize: 1}
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.RateLimiter(cfg),
+	)
+	do := func(xff string) int {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "172.18.0.3:5000"
+		req.Header.Set("X-Forwarded-For", xff)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w.Code
+	}
+	assert.Equal(t, http.StatusOK, do("198.51.100.7"))
+	assert.Equal(t, http.StatusOK, do("198.51.100.8"))
+	assert.Equal(t, http.StatusTooManyRequests, do("198.51.100.7"))
+}
+
 // ---- SetContextValues ----
 
 func TestSetContextValues(t *testing.T) {

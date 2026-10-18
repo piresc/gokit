@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -189,5 +190,43 @@ auth:
 	}
 	if cfg.Auth.RefreshTTL != 720*time.Hour {
 		t.Errorf("want 720h, got %v", cfg.Auth.RefreshTTL)
+	}
+}
+
+func TestValidate_TrustedProxies(t *testing.T) {
+	cases := []struct {
+		name    string
+		list    string
+		wantErr bool
+	}{
+		{"cidr", `["10.0.0.0/8"]`, false},
+		{"none", `["none"]`, false},
+		{"bad", `["bad"]`, true},
+		{"none with cidr", `["none", "10.0.0.0/8"]`, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			localDir := filepath.Join(dir, "config", "local")
+			if err := os.MkdirAll(localDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			yaml := "app:\n  name: test-service\n  environment: local\nserver:\n  port: 8080\n  trusted_proxies: " + tc.list + "\n"
+			if err := os.WriteFile(filepath.Join(localDir, "test.yaml"), []byte(yaml), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("APP_ENV", "local")
+
+			_, err := config.LoadFrom[TestServiceConfig]("test", dir)
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "server.trusted_proxies") {
+					t.Fatalf("want server.trusted_proxies error, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }

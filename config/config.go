@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"os"
 	"reflect"
 	"strings"
@@ -54,6 +55,9 @@ type ServerConfig struct {
 	WriteTimeout    int      `yaml:"write_timeout" mapstructure:"write_timeout"`
 	ShutdownTimeout int      `yaml:"shutdown_timeout" mapstructure:"shutdown_timeout"`
 	AllowedOrigins  []string `yaml:"allowed_origins" mapstructure:"allowed_origins"`
+	// TrustedProxies lists CIDRs whose forwarding headers are trusted for
+	// client-IP resolution. Empty means the defaults; ["none"] trusts none.
+	TrustedProxies []string `yaml:"trusted_proxies" mapstructure:"trusted_proxies"`
 }
 
 type DatabaseConfig struct {
@@ -224,12 +228,30 @@ func validate(cfg *Base) error {
 	if cfg.Server.Port < 0 || cfg.Server.Port >= maxPort {
 		return fmt.Errorf("server.port must be between 0 and 65535, got %d", cfg.Server.Port)
 	}
-	if cfg.Tracing.SampleRate < 0.0 || cfg.Tracing.SampleRate > 1.0 {
+	if err := validateTrustedProxies(cfg.Server.TrustedProxies); err != nil {
+		return err
+	}
+	if cfg.Tracing.SampleRate < 0.0|| cfg.Tracing.SampleRate > 1.0 {
 		return fmt.Errorf("tracing.sample_rate must be between 0.0 and 1.0, got %f", cfg.Tracing.SampleRate)
 	}
 	if cfg.App.Environment != defaultEnv && cfg.App.Environment != testEnv {
 		if cfg.JWT.Secret != "" && len(cfg.JWT.Secret) < minJWTSecretLength {
 			return fmt.Errorf("JWT_SECRET must be at least 32 characters in non-local environments")
+		}
+	}
+	return nil
+}
+
+func validateTrustedProxies(entries []string) error {
+	for _, e := range entries {
+		if e == "none" {
+			if len(entries) != 1 {
+				return fmt.Errorf(`server.trusted_proxies: "none" must be the only entry`)
+			}
+			continue
+		}
+		if _, err := netip.ParsePrefix(e); err != nil {
+			return fmt.Errorf("server.trusted_proxies: invalid CIDR %q", e)
 		}
 	}
 	return nil

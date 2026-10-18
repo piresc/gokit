@@ -17,6 +17,7 @@ import (
 	"github.com/piresc/gokit/mail"
 	"github.com/piresc/gokit/middleware"
 	pkgnats "github.com/piresc/gokit/nats"
+	"github.com/piresc/gokit/ratelimit"
 	pkgredis "github.com/piresc/gokit/redis"
 	"github.com/piresc/gokit/server"
 	"github.com/piresc/gokit/tracing"
@@ -83,9 +84,19 @@ func NewHTTPService[T any](serviceName string) (*HTTPApp[T], error) {
 		allowedOrigins = []string{"*"}
 	}
 
+	rlCfg := middleware.DefaultRateLimitConfig()
+	if len(cfg.Server.TrustedProxies) > 0 {
+		// Entries were already validated by config loading.
+		trusted, err := ratelimit.ParseTrustedProxies(cfg.Server.TrustedProxies)
+		if err != nil {
+			return nil, fmt.Errorf("server.trusted_proxies: %w", err)
+		}
+		rlCfg.TrustedProxies = trusted
+	}
+
 	var handler http.Handler = mux
 	handler = mw.TracingHandler()(handler)
-	handler = mw.RateLimiter(middleware.DefaultRateLimitConfig())(handler)
+	handler = mw.RateLimiter(rlCfg)(handler)
 	handler = mw.CorsHandler(allowedOrigins)(handler)
 	if base.appMetrics != nil {
 		handler = base.appMetrics.HTTPMiddleware()(handler)

@@ -1,6 +1,8 @@
 package ratelimit
 
 import (
+	"fmt"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -12,15 +14,54 @@ type Config struct {
 	RequestsPerSecond int
 	BurstSize         int
 	CleanupInterval   time.Duration
+	// TrustedProxies lists the proxy networks whose forwarding headers are
+	// honoured when resolving the client IP. nil means DefaultTrustedProxies();
+	// a non-nil empty slice means trust no proxy.
+	TrustedProxies []netip.Prefix
 }
 
-// DefaultConfig returns sane defaults: 100 req/s, burst 200, cleanup every 5m.
+// DefaultConfig returns sane defaults: 100 req/s, burst 200, cleanup every 5m,
+// and the private/loopback ranges as trusted proxies.
 func DefaultConfig() Config {
 	return Config{
 		RequestsPerSecond: 100,
 		BurstSize:         200,
 		CleanupInterval:   5 * time.Minute,
+		TrustedProxies:    DefaultTrustedProxies(),
 	}
+}
+
+// DefaultTrustedProxies returns the loopback and private address ranges.
+func DefaultTrustedProxies() []netip.Prefix {
+	return []netip.Prefix{
+		netip.MustParsePrefix("127.0.0.0/8"),
+		netip.MustParsePrefix("10.0.0.0/8"),
+		netip.MustParsePrefix("172.16.0.0/12"),
+		netip.MustParsePrefix("192.168.0.0/16"),
+		netip.MustParsePrefix("::1/128"),
+		netip.MustParsePrefix("fc00::/7"),
+	}
+}
+
+// ParseTrustedProxies parses CIDR strings. nil or empty input yields
+// DefaultTrustedProxies(); exactly ["none"] yields a non-nil empty slice
+// (trust no proxy).
+func ParseTrustedProxies(cidrs []string) ([]netip.Prefix, error) {
+	if len(cidrs) == 0 {
+		return DefaultTrustedProxies(), nil
+	}
+	if len(cidrs) == 1 && cidrs[0] == "none" {
+		return []netip.Prefix{}, nil
+	}
+	out := make([]netip.Prefix, 0, len(cidrs))
+	for _, c := range cidrs {
+		p, err := netip.ParsePrefix(c)
+		if err != nil {
+			return nil, fmt.Errorf("invalid trusted proxy CIDR %q: %w", c, err)
+		}
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 type entry struct {

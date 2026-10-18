@@ -35,6 +35,8 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `testkit` | Test helpers: containers (Postgres, Redis), JWT / RSA key factories, HTTP client, assertions | `NewPostgresContainer(ctx, migrationFS, dir)`, `NewRedisContainer(ctx)`, `GenerateToken(userID, role, secret)`, `NewRSAKeyPair(t)` |
 | `tracing` | OTel tracer factory + no-op fallback | `NewTracer(cfg) (Tracer, error)`, `NewNoOpTracer()` |
 
+> **Rate-limit client IP and trusted proxies.** The `middleware` rate limiter only honours `X-Forwarded-For` / `X-Real-IP` when the direct peer is a trusted proxy. The default trusts loopback and private ranges, which suits nginx or Traefik in Docker. When a port is published directly to clients via Docker Desktop, rootless Docker or userland-proxy, every client appears to come from a private gateway address and shares one bucket. In that case set `server.trusted_proxies: ["none"]`, or list the real proxy CIDRs.
+
 ## RS256 auth
 
 The auth service signs tokens with a private key. Other services verify with the public key and can check a Redis revocation list.
