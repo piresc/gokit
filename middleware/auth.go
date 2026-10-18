@@ -14,6 +14,8 @@ const (
 	KeyUserID contextKey = "user_id"
 	// KeyRole is the context key for the authenticated user role.
 	KeyRole contextKey = "role"
+	// KeyClaims is the context key for the verified RS256 claims.
+	KeyClaims contextKey = "claims"
 )
 
 // JWTAuth validates a Bearer token from the Authorization header and stores
