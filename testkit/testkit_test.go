@@ -121,7 +121,7 @@ func TestHTTPClient_Do_ShouldAddAuthorizationHeader_WhenTokenIsSet(t *testing.T)
 
 	// Assert
 	require.NoError(t, err, "request should succeed")
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "Bearer test-jwt-token-abc123", receivedAuth, "Authorization header should contain Bearer token")
 }
@@ -143,7 +143,7 @@ func TestHTTPClient_AssertStatus_ShouldSucceed_WhenStatusMatches(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err, "should succeed when status matches")
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 // TestHTTPClient_AssertStatus_ShouldFail_WhenStatusDoesNotMatch
@@ -176,7 +176,7 @@ func TestHTTPClient_ParseJSON_ShouldUnmarshalJSON(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"message":"hello"}`))
+		_, _ = w.Write([]byte(`{"message":"hello"}`))
 	}))
 	defer server.Close()
 

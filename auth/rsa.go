@@ -113,6 +113,9 @@ func NewRSASigner(key *rsa.PrivateKey, issuer string, ttl time.Duration) *RSASig
 
 // Sign issues a token for the user and returns it with its jti and expiry.
 func (s *RSASigner) Sign(userID, email, role string) (token, jti string, expiresAt time.Time, err error) {
+	if s.key == nil {
+		return "", "", time.Time{}, errors.New("auth: no RSA private key configured")
+	}
 	now := time.Now()
 	expiresAt = now.Add(s.ttl)
 	jti = uuid.NewString()
@@ -150,6 +153,9 @@ func NewRSAVerifier(key *rsa.PublicKey) *RSAVerifier {
 // ErrTokenInvalid.
 func (v *RSAVerifier) Verify(token string) (*RSAClaims, error) {
 	parsed, err := jwt.ParseWithClaims(token, &RSAClaims{}, func(*jwt.Token) (interface{}, error) {
+		if v.key == nil {
+			return nil, errors.New("no public key configured")
+		}
 		return v.key, nil
 	}, jwt.WithValidMethods([]string{"RS256"}), jwt.WithExpirationRequired())
 	if err != nil {

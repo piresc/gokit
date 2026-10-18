@@ -111,7 +111,7 @@ func (a *HTTPApp[T]) GRPCConn(name string) *grpc.ClientConn {
 		return conn
 	}
 
-	clients := a.Config.Base.GRPCClients
+	clients := a.Config.GRPCClients
 	entry, ok := clients[name]
 	if !ok || entry.Target == "" {
 		panic(fmt.Sprintf("bootstrap: grpc_clients.%s not configured", name))

@@ -161,7 +161,7 @@ func TestRSASigner_SignVerifyRoundTrip(t *testing.T) {
 	if claims.ID != jti || claims.Issuer != "user-service" {
 		t.Fatalf("unexpected jti/issuer: %+v", claims)
 	}
-	if d := claims.ExpiresAt.Time.Sub(expiresAt); d > time.Second || d < -time.Second {
+	if d := claims.ExpiresAt.Sub(expiresAt); d > time.Second || d < -time.Second {
 		t.Fatalf("exp mismatch: %v", d)
 	}
 }
@@ -244,6 +244,25 @@ func TestRSAVerifier_MissingSubject(t *testing.T) {
 	_, err := auth.NewRSAVerifier(&key.PublicKey).Verify(s)
 	if !errors.Is(err, auth.ErrTokenInvalid) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestRSAVerifier_NilKey(t *testing.T) {
+	key, _, _ := genRSA(t)
+	token, _, _, err := auth.NewRSASigner(key, "iss", time.Minute).Sign("u", "e", "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = auth.NewRSAVerifier(nil).Verify(token)
+	if !errors.Is(err, auth.ErrTokenInvalid) {
+		t.Fatalf("want ErrTokenInvalid, got %v", err)
+	}
+}
+
+func TestRSASigner_NilKey(t *testing.T) {
+	_, _, _, err := auth.NewRSASigner(nil, "iss", time.Minute).Sign("u", "e", "r")
+	if err == nil {
+		t.Fatal("expected error for nil private key")
 	}
 }
 

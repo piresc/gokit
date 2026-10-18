@@ -19,17 +19,17 @@ type ErrorResponse struct {
 func Success(w http.ResponseWriter, statusCode int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(SuccessResponse{Status: "success", Data: data})
+	_ = json.NewEncoder(w).Encode(SuccessResponse{Status: "success", Data: data})
 }
 
 func Error(w http.ResponseWriter, statusCode int, err string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(ErrorResponse{Status: "error", Error: err})
+	_ = json.NewEncoder(w).Encode(ErrorResponse{Status: "error", Error: err})
 }
 
 func ErrorWithRequestID(w http.ResponseWriter, statusCode int, err, requestID string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(ErrorResponse{Status: "error", Error: err, RequestID: requestID})
+	_ = json.NewEncoder(w).Encode(ErrorResponse{Status: "error", Error: err, RequestID: requestID})
 }

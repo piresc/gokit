@@ -143,7 +143,9 @@ func TestRS256Auth(t *testing.T) {
 			name: "empty jti skips lookup", header: "Bearer " + noJTI, wantStatus: 200, wantCalled: true,
 			setup: func(t *testing.T) (auth.RevocationChecker, middleware.RS256Options) {
 				store, mr := newRS256Redis(t)
-				mr.Set(auth.RevocationKeyPrefix, "1")
+				if err := mr.Set(auth.RevocationKeyPrefix, "1"); err != nil {
+					t.Fatal(err)
+				}
 				return store, middleware.RS256Options{}
 			},
 		},

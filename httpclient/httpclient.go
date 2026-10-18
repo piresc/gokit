@@ -96,7 +96,7 @@ func (c *Client) Do(ctx context.Context, method, endpoint string, body any) (*ht
 		// On 5xx or network error, drain and close the body before retrying.
 		if attempt < 2 {
 			if resp != nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				resp = nil
 			}
 
@@ -139,7 +139,7 @@ func (c *Client) GetJSON(ctx context.Context, endpoint string, result any) error
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
@@ -154,7 +154,7 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, body, result any
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
@@ -169,7 +169,7 @@ func (c *Client) PutJSON(ctx context.Context, endpoint string, body, result any)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)

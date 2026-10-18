@@ -2,6 +2,7 @@ package testkit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -36,8 +37,7 @@ func NewPostgresContainer(ctx context.Context, migrationFS interface{}, dir stri
 	// Callers should run migrations explicitly on the returned DB connection.
 
 	// Create postgres container
-	pgContainer, err := postgres.RunContainer(ctx,
-		testcontainers.WithImage("postgres:15-alpine"),
+	pgContainer, err := postgres.Run(ctx, "postgres:15-alpine",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
@@ -54,15 +54,13 @@ func NewPostgresContainer(ctx context.Context, migrationFS interface{}, dir stri
 	// Get connection string
 	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		pgContainer.Terminate(ctx)
-		return nil, fmt.Errorf("get postgres connection string: %w", err)
+		return nil, errors.Join(fmt.Errorf("get postgres connection string: %w", err), pgContainer.Terminate(ctx))
 	}
 
 	// Connect to database
 	db, err := sqlx.Connect("postgres", connStr)
 	if err != nil {
-		pgContainer.Terminate(ctx)
-		return nil, fmt.Errorf("connect to postgres: %w", err)
+		return nil, errors.Join(fmt.Errorf("connect to postgres: %w", err), pgContainer.Terminate(ctx))
 	}
 
 	return &PostgresContainer{
@@ -98,8 +96,7 @@ type RedisContainer struct {
 //	defer container.Close(ctx)
 //	// Use container.Host and container.Port to connect
 func NewRedisContainer(ctx context.Context) (*RedisContainer, error) {
-	redisContainer, err := redis.RunContainer(ctx,
-		testcontainers.WithImage("redis:7-alpine"),
+	redisContainer, err := redis.Run(ctx, "redis:7-alpine",
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("Ready to accept connections").
 				WithStartupTimeout(10*time.Second),
@@ -111,14 +108,12 @@ func NewRedisContainer(ctx context.Context) (*RedisContainer, error) {
 
 	host, err := redisContainer.Host(ctx)
 	if err != nil {
-		redisContainer.Terminate(ctx)
-		return nil, fmt.Errorf("get redis host: %w", err)
+		return nil, errors.Join(fmt.Errorf("get redis host: %w", err), redisContainer.Terminate(ctx))
 	}
 
 	port, err := redisContainer.MappedPort(ctx, "6379")
 	if err != nil {
-		redisContainer.Terminate(ctx)
-		return nil, fmt.Errorf("get redis port: %w", err)
+		return nil, errors.Join(fmt.Errorf("get redis port: %w", err), redisContainer.Terminate(ctx))
 	}
 
 	return &RedisContainer{

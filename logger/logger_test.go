@@ -10,7 +10,7 @@ import (
 
 	"github.com/piresc/gokit/config"
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func TestNewLogger_JSONFormat(t *testing.T) {
@@ -47,7 +47,7 @@ func TestOtelHandler_WithSpan(t *testing.T) {
 	// otelHandler must inject trace_id and span_id when a valid span is active
 	var buf bytes.Buffer
 	h := &otelHandler{base: slog.NewJSONHandler(&buf, nil)}
-	tp := trace.NewNoopTracerProvider()
+	tp := noop.NewTracerProvider()
 	ctx, span := tp.Tracer("test").Start(context.Background(), "test-span")
 	defer span.End()
 	r := slog.NewRecord(time.Now(), slog.LevelInfo, "msg", 0)

@@ -54,7 +54,7 @@ func TestJWTAuth_Valid(t *testing.T) {
 	m := newMiddleware()
 	h := chain(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprint(w, middleware.GetUserID(r))
+			_, _ = fmt.Fprint(w, middleware.GetUserID(r))
 		}),
 		m.JWTAuth(testSecret),
 	)
@@ -189,7 +189,7 @@ func TestSetContextValues(t *testing.T) {
 	m := newMiddleware()
 	h := chain(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprint(w, middleware.GetTransactionID(r))
+			_, _ = fmt.Fprint(w, middleware.GetTransactionID(r))
 		}),
 		m.SetContextValues(),
 	)

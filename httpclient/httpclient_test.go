@@ -20,14 +20,14 @@ func TestDo_GET_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
 	c := NewClient(Config{BaseURL: srv.URL})
 	resp, err := c.Get(context.Background(), "/test")
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestDo_NoRetryOn4xx(t *testing.T) {
@@ -41,7 +41,7 @@ func TestDo_NoRetryOn4xx(t *testing.T) {
 	resp, _ := c.Get(context.Background(), "/test")
 	assert.Equal(t, 1, calls)
 	assert.Equal(t, 400, resp.StatusCode)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestDo_RetryOn5xx(t *testing.T) {
@@ -54,13 +54,13 @@ func TestDo_RetryOn5xx(t *testing.T) {
 	c := NewClient(Config{BaseURL: srv.URL, Timeout: 5 * time.Second})
 	resp, _ := c.Get(context.Background(), "/test")
 	assert.Equal(t, 3, calls)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestGetJSON_EnvelopeUnwrap(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"data":{"id":"abc"}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"id":"abc"}}`))
 	}))
 	defer srv.Close()
 	c := NewClient(Config{BaseURL: srv.URL})
@@ -74,7 +74,7 @@ func TestGetJSON_EnvelopeUnwrap(t *testing.T) {
 
 func TestGetJSON_DirectUnmarshal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"id":"xyz"}`))
+		_, _ = w.Write([]byte(`{"id":"xyz"}`))
 	}))
 	defer srv.Close()
 	c := NewClient(Config{BaseURL: srv.URL})
@@ -95,7 +95,7 @@ func TestDo_APIKeyHeader(t *testing.T) {
 	c := NewClient(Config{BaseURL: srv.URL, APIKey: "my-key"})
 	resp, err := c.Get(context.Background(), "/test")
 	assert.NoError(t, err)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestDo_ContextCancellation(t *testing.T) {
@@ -114,7 +114,7 @@ func TestDo_ContextCancellation(t *testing.T) {
 func TestGetJSON_EnvelopeError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":false,"error":"not found"}`))
+		_, _ = w.Write([]byte(`{"success":false,"error":"not found"}`))
 	}))
 	defer srv.Close()
 	c := NewClient(Config{BaseURL: srv.URL})
@@ -134,14 +134,14 @@ func TestDo_ContentTypeAndAcceptHeaders(t *testing.T) {
 	c := NewClient(Config{BaseURL: srv.URL})
 	resp, err := c.Get(context.Background(), "/test")
 	assert.NoError(t, err)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }
 
 func TestPostJSON_EnvelopeUnwrap(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"data":{"token":"abc123"}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"token":"abc123"}}`))
 	}))
 	defer srv.Close()
 	c := NewClient(Config{BaseURL: srv.URL})
@@ -156,7 +156,7 @@ func TestPostJSON_EnvelopeUnwrap(t *testing.T) {
 func TestPutJSON_DirectUnmarshal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "PUT", r.Method)
-		w.Write([]byte(`{"updated":true}`))
+		_, _ = w.Write([]byte(`{"updated":true}`))
 	}))
 	defer srv.Close()
 	c := NewClient(Config{BaseURL: srv.URL})
@@ -178,5 +178,5 @@ func TestDo_Delete(t *testing.T) {
 	resp, err := c.Delete(context.Background(), "/resource/1")
 	assert.NoError(t, err)
 	assert.Equal(t, 204, resp.StatusCode)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 }

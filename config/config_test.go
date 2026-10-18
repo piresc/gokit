@@ -16,7 +16,9 @@ type TestServiceConfig struct {
 func TestLoad_LocalYAML(t *testing.T) {
 	dir := t.TempDir()
 	localDir := filepath.Join(dir, "config", "local")
-	os.MkdirAll(localDir, 0o755)
+	if err := os.MkdirAll(localDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	yaml := `
 app:
@@ -33,11 +35,11 @@ jwt:
 service:
   max_items: 42
 `
-	os.WriteFile(filepath.Join(localDir, "test.yaml"), []byte(yaml), 0o644)
-	os.Setenv("APP_ENV", "local")
-	os.Setenv("JWT_SECRET", "test-secret-that-is-at-least-32-chars-long")
-	defer os.Unsetenv("APP_ENV")
-	defer os.Unsetenv("JWT_SECRET")
+	if err := os.WriteFile(filepath.Join(localDir, "test.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("APP_ENV", "local")
+	t.Setenv("JWT_SECRET", "test-secret-that-is-at-least-32-chars-long")
 
 	cfg, err := config.LoadFrom[TestServiceConfig]("test", dir)
 	if err != nil {
@@ -57,7 +59,9 @@ service:
 func TestLoad_EnvOverridesSecrets(t *testing.T) {
 	dir := t.TempDir()
 	localDir := filepath.Join(dir, "config", "local")
-	os.MkdirAll(localDir, 0o755)
+	if err := os.MkdirAll(localDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	yaml := `
 app:
@@ -72,13 +76,12 @@ jwt:
 database:
   host: yaml-host
 `
-	os.WriteFile(filepath.Join(localDir, "test.yaml"), []byte(yaml), 0o644)
-	os.Setenv("APP_ENV", "local")
-	os.Setenv("DB_HOST", "env-host")
-	os.Setenv("JWT_SECRET", "test-secret-that-is-at-least-32-chars-long")
-	defer os.Unsetenv("APP_ENV")
-	defer os.Unsetenv("DB_HOST")
-	defer os.Unsetenv("JWT_SECRET")
+	if err := os.WriteFile(filepath.Join(localDir, "test.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("APP_ENV", "local")
+	t.Setenv("DB_HOST", "env-host")
+	t.Setenv("JWT_SECRET", "test-secret-that-is-at-least-32-chars-long")
 
 	type Empty struct{}
 	cfg, err := config.LoadFrom[Empty]("test", dir)

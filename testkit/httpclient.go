@@ -52,7 +52,7 @@ func (c *Client) AssertStatus(req *http.Request, wantStatus int) (*http.Response
 	}
 	if resp.StatusCode != wantStatus {
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("expected status %d, got %d; body: %s", wantStatus, resp.StatusCode, string(body))
 	}
 	return resp, nil
@@ -61,7 +61,7 @@ func (c *Client) AssertStatus(req *http.Request, wantStatus int) (*http.Response
 // ParseJSON reads the response body and unmarshals JSON into v.
 // Closes response body after reading.
 func (c *Client) ParseJSON(resp *http.Response, v interface{}) error {
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("read response body: %w", err)

@@ -44,7 +44,7 @@ func TestNewClient_ShouldSucceed_WithMiniredis(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, client)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 }
 
 func TestClient_GetSet_ShouldWork(t *testing.T) {
@@ -58,7 +58,7 @@ func TestClient_GetSet_ShouldWork(t *testing.T) {
 	}
 	client, err := NewClient(cfg)
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ctx := context.Background()
 	err = client.Set(ctx, "foo", "bar", time.Minute)
@@ -80,7 +80,7 @@ func TestClient_Delete_ShouldWork(t *testing.T) {
 	}
 	client, err := NewClient(cfg)
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ctx := context.Background()
 	_ = client.Set(ctx, "key", "val", time.Minute)
@@ -99,7 +99,7 @@ func TestClient_SetNX_ShouldWork(t *testing.T) {
 	}
 	client, err := NewClient(cfg)
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ctx := context.Background()
 	ok, err := client.SetNX(ctx, "nx-key", "val", time.Minute)
@@ -122,7 +122,7 @@ func TestClient_HMSetHGetAll_ShouldWork(t *testing.T) {
 	}
 	client, err := NewClient(cfg)
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ctx := context.Background()
 	err = client.HMSet(ctx, "hash", map[string]interface{}{"f1": "v1", "f2": "v2"})
@@ -145,7 +145,7 @@ func TestClient_Expire_ShouldWork(t *testing.T) {
 	}
 	client, err := NewClient(cfg)
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ctx := context.Background()
 	_ = client.Set(ctx, "exp-key", "val", 0)

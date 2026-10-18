@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"time"
@@ -55,8 +56,7 @@ func NewPostgresClient(cfg config.DatabaseConfig) (*PostgresClient, error) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to ping postgres: %w", err)
+		return nil, errors.Join(fmt.Errorf("failed to ping postgres: %w", err), db.Close())
 	}
 
 	return &PostgresClient{db: db}, nil

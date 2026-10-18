@@ -18,7 +18,9 @@ func TestWrite_AppError(t *testing.T) {
 		t.Errorf("want 404, got %d", w.Code)
 	}
 	var body map[string]string
-	json.Unmarshal(w.Body.Bytes(), &body)
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
 	if body["status"] != "error" {
 		t.Errorf("want status=error, got %s", body["status"])
 	}
