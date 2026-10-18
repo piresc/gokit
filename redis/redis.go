@@ -34,6 +34,8 @@ func NewClient(cfg config.RedisConfig) (*Client, error) {
 		WriteTimeout: 3 * time.Second,
 	})
 
+	client.AddHook(tracingHook{})
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

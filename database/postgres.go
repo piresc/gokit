@@ -2,13 +2,17 @@ package database
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"net/url"
 	"time"
 
+	"github.com/XSAM/otelsql"
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 	"github.com/jmoiron/sqlx"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/piresc/gokit/config"
 )
@@ -30,10 +34,19 @@ func NewPostgresClient(cfg config.DatabaseConfig) (*PostgresClient, error) {
 		cfg.SSLMode,
 	)
 
-	db, err := sqlx.Open("pgx", dsn)
+	rawDB, err := otelsql.Open("pgx", dsn,
+		otelsql.WithAttributes(semconv.DBSystemNamePostgreSQL),
+		otelsql.WithSpanOptions(otelsql.SpanOptions{
+			OmitConnResetSession: true,
+			OmitRows:             true,
+			OmitConnectorConnect: true,
+			SpanFilter:           hasParentSpan,
+		}),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open postgres connection: %w", err)
 	}
+	db := sqlx.NewDb(rawDB, "pgx")
 
 	if cfg.MaxConns > 0 {
 		db.SetMaxOpenConns(cfg.MaxConns)
@@ -60,6 +73,11 @@ func NewPostgresClient(cfg config.DatabaseConfig) (*PostgresClient, error) {
 	}
 
 	return &PostgresClient{db: db}, nil
+}
+
+// hasParentSpan limits span creation to calls whose ctx already holds a span.
+func hasParentSpan(ctx context.Context, _ otelsql.Method, _ string, _ []driver.NamedValue) bool {
+	return trace.SpanContextFromContext(ctx).IsValid()
 }
 
 func (p *PostgresClient) GetDB() *sqlx.DB {

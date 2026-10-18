@@ -85,6 +85,7 @@ func (a *baseApp) initObservability(cfg config.Base, serviceName string) {
 		SampleRate:   cfg.Tracing.SampleRate,
 		Exporter:     cfg.Tracing.Exporter,
 		OTLPEndpoint: cfg.Tracing.OTLPEndpoint,
+		ExcludePaths: tracingExcludePaths(cfg.Tracing.ExcludePaths),
 	})
 	if err != nil {
 		a.log.Warn("tracer init failed, noop fallback", logger.Err(err))

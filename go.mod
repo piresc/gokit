@@ -3,6 +3,7 @@ module github.com/piresc/gokit
 go 1.26.0
 
 require (
+	github.com/XSAM/otelsql v0.44.0
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/bsm/redislock v0.10.0
 	github.com/go-viper/mapstructure/v2 v2.5.0

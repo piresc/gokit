@@ -11,7 +11,7 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `bootstrap` | One-call service wiring — config, DB, Redis, NATS, Asynq, tracing, metrics, graceful shutdown | `NewGRPCService[T](name)`, `NewHTTPService[T](name)`, `app.GRPCConn(name)`, `app.Run()`, `app.Shutdown(ctx)` |
 | `circuitbreaker` | Sony gobreaker wrapper | `New(Config)`, `cb.Execute(fn)` |
 | `config` | Generic Viper-based config loader; merges YAML + env vars | `Load[T](serviceName)`, `Config[T]{Base, Service T}` |
-| `database` | pgx/sqlx Postgres client with tracing | `NewPostgresClient(cfg)`, `client.GetDB()`, `client.Ping(ctx)`, `client.Close()` |
+| `database` | pgx/sqlx Postgres client with automatic OTel spans (only under an existing parent span). `TracedPostgresClient` is deprecated since v0.5.0 | `NewPostgresClient(cfg)`, `client.GetDB()`, `client.Ping(ctx)`, `client.Close()` |
 | `grpcclient` | Dial a gRPC backend with OTel tracing | `Dial(ctx, ClientConfig{Target, Tracer, Logger})` |
 | `grpcerror` | Map `apperror` → gRPC status codes | `MapError(err) error` |
 | `grpcmiddleware` | Unary + stream interceptors: auth, logging, tracing, recovery, rate-limit | `NewInterceptors(jwtSecret, log, tracer, redisClient)` |
@@ -26,7 +26,7 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `middleware` | `net/http` middleware: JWT / RS256 auth, CORS, rate-limit, recovery, security headers, tracing | `NewMiddleware(log, tracer)`, `mw.JWTAuth(secret)`, `mw.RS256Auth(verifier, RS256Options{Revocation, FailOpen})`, `GetClaims(r)`, `mw.RequireRole(roles...)`, `mw.CorsHandler(origins)` |
 | `nats` | NATS JetStream client + typed publisher | `NewClient(url)`, `NewPublisher(client)`, `publisher.Publish(ctx, subject, data, msgID)`, `client.ConsumeContext(name, handler)` |
 | `ratelimit` | Token-bucket rate-limit store (used by middleware) | `NewStore(cfg)`, `store.Allow(key)` |
-| `redis` | go-redis v9 client with OTel tracing | `NewClient(cfg)`, `client.GetClient()`, `client.Close()` |
+| `redis` | go-redis v9 client with automatic OTel spans (only under an existing parent span). `TracedRedisClient` is deprecated since v0.5.0 | `NewClient(cfg)`, `client.GetClient()`, `client.Close()` |
 | `redislock` | Distributed lock via Redis | `NewLocker(client, cfg)`, `locker.Acquire(ctx, key) (*Lock, error)`, `lock.Release(ctx)` |
 | `response` | Standard JSON response envelope | `Success(w, status, data)`, `Error(w, status, msg)`, `ErrorWithRequestID(w, status, msg, reqID)` |
 | `retry` | Exponential-backoff retry helper | `Do(ctx, cfg, fn)`, `DefaultConfig()` |
