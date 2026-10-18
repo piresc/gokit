@@ -30,6 +30,7 @@ type Base struct {
 	Database    DatabaseConfig    `yaml:"database" mapstructure:"database"`
 	Redis       RedisConfig       `yaml:"redis" mapstructure:"redis"`
 	JWT         JWTConfig         `yaml:"jwt" mapstructure:"jwt"`
+	Auth        AuthConfig        `yaml:"auth" mapstructure:"auth"`
 	Tracing     TracingConfig     `yaml:"tracing" mapstructure:"tracing"`
 	Logger      LoggerConfig      `yaml:"logger" mapstructure:"logger"`
 	GRPC        GRPCConfig        `yaml:"grpc" mapstructure:"grpc"`
@@ -79,6 +80,16 @@ type JWTConfig struct {
 	Secret     string `yaml:"secret" mapstructure:"secret"`
 	Expiration int    `yaml:"expiration" mapstructure:"expiration"`
 	Issuer     string `yaml:"issuer" mapstructure:"issuer"`
+}
+
+type AuthConfig struct {
+	PrivateKeyPEM  string        `yaml:"private_key_pem" mapstructure:"private_key_pem"`
+	PrivateKeyPath string        `yaml:"private_key_path" mapstructure:"private_key_path"`
+	PublicKeyPEM   string        `yaml:"public_key_pem" mapstructure:"public_key_pem"`
+	PublicKeyPath  string        `yaml:"public_key_path" mapstructure:"public_key_path"`
+	Issuer         string        `yaml:"issuer" mapstructure:"issuer"`
+	AccessTTL      time.Duration `yaml:"access_ttl" mapstructure:"access_ttl"`
+	RefreshTTL     time.Duration `yaml:"refresh_ttl" mapstructure:"refresh_ttl"`
 }
 
 type TracingConfig struct {
@@ -167,6 +178,9 @@ func LoadFrom[T any](serviceName, baseDir string) (*Config[T], error) {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
 
+	v.SetDefault("auth.access_ttl", "15m")
+	v.SetDefault("auth.refresh_ttl", "720h")
+
 	bindSecrets(v)
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -194,6 +208,13 @@ func bindSecrets(v *viper.Viper) {
 	_ = v.BindEnv("redis.port", "REDIS_PORT")
 	_ = v.BindEnv("redis.password", "REDIS_PASSWORD")
 	_ = v.BindEnv("jwt.secret", "JWT_SECRET")
+	_ = v.BindEnv("auth.private_key_pem", "JWT_PRIVATE_KEY_PEM")
+	_ = v.BindEnv("auth.private_key_path", "JWT_PRIVATE_KEY_PATH")
+	_ = v.BindEnv("auth.public_key_pem", "JWT_PUBLIC_KEY_PEM")
+	_ = v.BindEnv("auth.public_key_path", "JWT_PUBLIC_KEY_PATH")
+	_ = v.BindEnv("auth.issuer", "JWT_ISSUER")
+	_ = v.BindEnv("auth.access_ttl", "ACCESS_TOKEN_TTL")
+	_ = v.BindEnv("auth.refresh_ttl", "REFRESH_TOKEN_TTL")
 	_ = v.BindEnv("nats.url", "NATS_URL")
 	_ = v.BindEnv("tracing.otlp_endpoint", "TRACING_OTLP_ENDPOINT")
 	_ = v.BindEnv("mail.password", "MAIL_PASSWORD")
