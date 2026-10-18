@@ -231,7 +231,7 @@ func validate(cfg *Base) error {
 	if err := validateTrustedProxies(cfg.Server.TrustedProxies); err != nil {
 		return err
 	}
-	if cfg.Tracing.SampleRate < 0.0|| cfg.Tracing.SampleRate > 1.0 {
+	if cfg.Tracing.SampleRate < 0.0 || cfg.Tracing.SampleRate > 1.0 {
 		return fmt.Errorf("tracing.sample_rate must be between 0.0 and 1.0, got %f", cfg.Tracing.SampleRate)
 	}
 	if cfg.App.Environment != defaultEnv && cfg.App.Environment != testEnv {

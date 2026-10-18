@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -73,6 +74,38 @@ func TestPostgres_SpanWithParent(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "expected a child span of the parent trace")
+}
+
+func TestPostgres_ErrorSpanHidesMessage(t *testing.T) {
+	client, recorder, tp := setupPostgresTracing(t)
+
+	ctx, parent := tp.Tracer("test").Start(context.Background(), "parent")
+	var out string
+	err := client.GetDB().QueryRowxContext(ctx, "SELECT $1::uuid", "not-a-uuid-secret").Scan(&out)
+	parent.End()
+	require.Error(t, err)
+
+	checked := 0
+	for _, s := range recorder.Ended() {
+		if s.Name() == "parent" || s.Status().Code != codes.Error {
+			continue
+		}
+		checked++
+		assert.Empty(t, s.Events())
+		assert.NotContains(t, s.Status().Description, "secret")
+		assert.NotContains(t, s.Status().Description, "invalid input syntax")
+		var sqlState string
+		for _, kv := range s.Attributes() {
+			v := kv.Value.String()
+			assert.NotContains(t, v, "secret")
+			assert.NotContains(t, v, "invalid input syntax")
+			if kv.Key == "db.response.status_code" {
+				sqlState = v
+			}
+		}
+		assert.Equal(t, "22P02", sqlState)
+	}
+	assert.NotZero(t, checked, "expected an errored query span")
 }
 
 func TestPostgres_NoParentNoSpan(t *testing.T) {

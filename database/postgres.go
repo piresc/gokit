@@ -9,8 +9,12 @@ import (
 	"time"
 
 	"github.com/XSAM/otelsql"
+	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
 	"github.com/jmoiron/sqlx"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 	"go.opentelemetry.io/otel/trace"
 
@@ -36,6 +40,8 @@ func NewPostgresClient(cfg config.DatabaseConfig) (*PostgresClient, error) {
 
 	rawDB, err := otelsql.Open("pgx", dsn,
 		otelsql.WithAttributes(semconv.DBSystemNamePostgreSQL),
+		otelsql.WithTracerProvider(redactingTracerProvider{}),
+		otelsql.WithSpanErrorAttributesGetter(sqlStateAttributes),
 		otelsql.WithSpanOptions(otelsql.SpanOptions{
 			OmitConnResetSession: true,
 			OmitRows:             true,
@@ -78,6 +84,46 @@ func NewPostgresClient(cfg config.DatabaseConfig) (*PostgresClient, error) {
 // hasParentSpan limits span creation to calls whose ctx already holds a span.
 func hasParentSpan(ctx context.Context, _ otelsql.Method, _ string, _ []driver.NamedValue) bool {
 	return trace.SpanContextFromContext(ctx).IsValid()
+}
+
+// sqlStateAttributes exposes only the SQLSTATE of a Postgres error. The error
+// message can quote user-supplied values, so it never reaches a span.
+func sqlStateAttributes(err error) []attribute.KeyValue {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code != "" {
+		return []attribute.KeyValue{semconv.DBResponseStatusCode(pgErr.Code)}
+	}
+	return nil
+}
+
+// redactingTracerProvider wraps the global tracer provider so spans created by
+// otelsql mark failures as Error without recording the error as an exception
+// event. otelsql's SpanOptions.RecordError cannot do this: returning false
+// skips both the event and the Error status.
+type redactingTracerProvider struct {
+	trace.TracerProvider // satisfies the sealed interface; Tracer is overridden below
+}
+
+func (redactingTracerProvider) Tracer(name string, opts ...trace.TracerOption) trace.Tracer {
+	return redactingTracer{Tracer: otel.GetTracerProvider().Tracer(name, opts...)}
+}
+
+type redactingTracer struct {
+	trace.Tracer
+}
+
+func (t redactingTracer) Start(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+	ctx, span := t.Tracer.Start(ctx, name, opts...)
+	return ctx, redactingSpan{Span: span}
+}
+
+type redactingSpan struct {
+	trace.Span
+}
+
+// RecordError drops the error text and only flags the span as failed.
+func (s redactingSpan) RecordError(error, ...trace.EventOption) {
+	s.SetStatus(codes.Error, "")
 }
 
 func (p *PostgresClient) GetDB() *sqlx.DB {

@@ -52,7 +52,7 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 **Additions**
 
 - NATS: `Client.Publish` injects W3C trace context into message headers. The new `Client.ConsumeContext` gives the handler a context with a consumer span.
-- Postgres (otelsql) and Redis (go-redis hook) create child spans automatically, but only under an existing parent span. `TracedPostgresClient` and `TracedRedisClient` are deprecated. bootstrap passes `tracing.exclude_paths` to the tracer, defaulting to `["/health"]`.
+- Postgres (otelsql) and Redis (go-redis hook) create child spans automatically, but only under an existing parent span. Failed Postgres queries record only the SQLSTATE code, never the error message. `TracedPostgresClient` and `TracedRedisClient` are deprecated. bootstrap passes `tracing.exclude_paths` to the tracer, defaulting to `["/health"]`.
 
 ## RS256 auth
 
