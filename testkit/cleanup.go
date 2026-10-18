@@ -11,7 +11,8 @@ import (
 // dependency order (children before parents) to respect foreign-key constraints.
 //
 // Example:
-//   TruncateTables(db, "presence_logs", "reservations", "drivers")
+//
+//	TruncateTables(db, "presence_logs", "reservations", "drivers")
 func TruncateTables(db *sqlx.DB, tables ...string) error {
 	for _, table := range tables {
 		if _, err := db.Exec(fmt.Sprintf("TRUNCATE TABLE %s CASCADE", table)); err != nil {

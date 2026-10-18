@@ -37,8 +37,8 @@ func (n *NoOpTracer) ExtractContext(ctx context.Context, _ interface{}) context.
 	return ctx
 }
 
-func (n *NoOpTracer) IsEnabled() bool       { return false }
-func (n *NoOpTracer) ShouldTrace(_ string) bool { return false }
+func (n *NoOpTracer) IsEnabled() bool                  { return false }
+func (n *NoOpTracer) ShouldTrace(_ string) bool        { return false }
 func (n *NoOpTracer) Shutdown(_ context.Context) error { return nil }
 
 type NoOpTransaction struct {
@@ -46,7 +46,7 @@ type NoOpTransaction struct {
 }
 
 func (t *NoOpTransaction) Context() context.Context { return t.ctx }
-func (t *NoOpTransaction) SetName(_ string)          {}
-func (t *NoOpTransaction) AddAttribute(_, _ string)  {}
-func (t *NoOpTransaction) AddError(_ error)          {}
-func (t *NoOpTransaction) End()                      {}
+func (t *NoOpTransaction) SetName(_ string)         {}
+func (t *NoOpTransaction) AddAttribute(_, _ string) {}
+func (t *NoOpTransaction) AddError(_ error)         {}
+func (t *NoOpTransaction) End()                     {}

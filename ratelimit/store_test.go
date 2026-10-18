@@ -47,7 +47,7 @@ func TestStore_Allow_PerKey(t *testing.T) {
 
 	assert.True(t, store.Allow("a"))
 	assert.False(t, store.Allow("a")) // a exhausted
-	assert.True(t, store.Allow("b")) // b has fresh bucket
+	assert.True(t, store.Allow("b"))  // b has fresh bucket
 }
 
 func TestStore_Cleanup(t *testing.T) {

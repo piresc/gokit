@@ -88,8 +88,8 @@ func (e *errorHandler) Enabled(_ context.Context, _ slog.Level) bool { return tr
 func (e *errorHandler) Handle(_ context.Context, _ slog.Record) error {
 	return assert.AnError
 }
-func (e *errorHandler) WithAttrs(_ []slog.Attr) slog.Handler  { return e }
-func (e *errorHandler) WithGroup(_ string) slog.Handler       { return e }
+func (e *errorHandler) WithAttrs(_ []slog.Attr) slog.Handler { return e }
+func (e *errorHandler) WithGroup(_ string) slog.Handler      { return e }
 
 func TestNewLoggerWithProvider_NilProvider(t *testing.T) {
 	cfg := config.LoggerConfig{Level: "info", Format: "json"}

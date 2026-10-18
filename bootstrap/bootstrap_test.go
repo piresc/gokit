@@ -113,13 +113,13 @@ func TestNewHTTPService_MinimalConfig_NoPanic(t *testing.T) {
 	require.NotNil(t, app)
 }
 
-func TestNewHTTPService_EngineNonNil(t *testing.T) {
+func TestNewHTTPService_MuxNonNil(t *testing.T) {
 	restore := setupConfig(t, "testsvc")
 	defer restore()
 
 	app, err := bootstrap.NewHTTPService[emptySvc]("testsvc")
 	require.NoError(t, err)
-	assert.NotNil(t, app.Engine)
+	assert.NotNil(t, app.Mux)
 }
 
 func TestHTTPApp_NilDBWhenUnconfigured(t *testing.T) {

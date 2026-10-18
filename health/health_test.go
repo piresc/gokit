@@ -21,7 +21,7 @@ type stubChecker struct {
 }
 
 func (s *stubChecker) Check(_ context.Context) error { return s.err }
-func (s *stubChecker) Name() string                   { return s.name }
+func (s *stubChecker) Name() string                  { return s.name }
 
 // ---- Service ----
 

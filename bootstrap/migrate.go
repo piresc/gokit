@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"embed"
 	"fmt"
+	"net/url"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -10,6 +11,18 @@ import (
 
 	"github.com/piresc/gokit/config"
 )
+
+// migrationURL builds the postgres URL with properly escaped credentials.
+func migrationURL(cfg config.DatabaseConfig) string {
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(cfg.Username, cfg.Password),
+		Host:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		Path:     "/" + cfg.Database,
+		RawQuery: "sslmode=" + url.QueryEscape(cfg.SSLMode),
+	}
+	return u.String()
+}
 
 // RunMigrations runs embedded SQL migrations against the service database on boot.
 // Pass the embed.FS and the directory inside it that contains migration files.
@@ -26,10 +39,7 @@ func RunMigrations(fsys embed.FS, dir string, cfg config.DatabaseConfig) error {
 		return fmt.Errorf("migration source: %w", err)
 	}
 
-	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		cfg.Username, cfg.Password, cfg.Host, cfg.Port, cfg.Database, cfg.SSLMode)
-
-	m, err := migrate.NewWithSourceInstance("iofs", src, dbURL)
+	m, err := migrate.NewWithSourceInstance("iofs", src, migrationURL(cfg))
 	if err != nil {
 		return fmt.Errorf("migrate init: %w", err)
 	}

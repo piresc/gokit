@@ -24,12 +24,13 @@ type PostgresContainer struct {
 // Returns the container and connection, or an error if setup fails.
 //
 // Example:
-//   container, err := NewPostgresContainer(ctx, nil, "")
-//   if err != nil {
-//       t.Fatal(err)
-//   }
-//   defer container.Close(ctx)
-//   // Run migrations on container.DB
+//
+//	container, err := NewPostgresContainer(ctx, nil, "")
+//	if err != nil {
+//	    t.Fatal(err)
+//	}
+//	defer container.Close(ctx)
+//	// Run migrations on container.DB
 func NewPostgresContainer(ctx context.Context, migrationFS interface{}, dir string) (*PostgresContainer, error) {
 	// Note: migrationFS and dir parameters are kept for API compatibility but not used.
 	// Callers should run migrations explicitly on the returned DB connection.
@@ -92,9 +93,10 @@ type RedisContainer struct {
 // Returns the container with host and port, or an error if setup fails.
 //
 // Example:
-//   container, err := NewRedisContainer(ctx)
-//   defer container.Close(ctx)
-//   // Use container.Host and container.Port to connect
+//
+//	container, err := NewRedisContainer(ctx)
+//	defer container.Close(ctx)
+//	// Use container.Host and container.Port to connect
 func NewRedisContainer(ctx context.Context) (*RedisContainer, error) {
 	redisContainer, err := redis.RunContainer(ctx,
 		testcontainers.WithImage("redis:7-alpine"),
