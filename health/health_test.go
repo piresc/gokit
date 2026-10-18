@@ -2,6 +2,7 @@ package health_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -89,6 +90,23 @@ func TestRoutes_Ready_Unhealthy(t *testing.T) {
 	mux := newMux(svc)
 	w := getPath(mux, "/health/ready")
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestReady_FailingCheckerHidesCause(t *testing.T) {
+	svc := health.NewService(nil)
+	svc.AddChecker("db", &stubChecker{name: "db", err: errors.New("password authentication failed")})
+	mux := newMux(svc)
+	w := getPath(mux, "/health/ready")
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.NotContains(t, w.Body.String(), "password")
+
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	deps, ok := body["dependencies"].(map[string]interface{})
+	require.True(t, ok)
+	db, ok := deps["db"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "check failed", db["error"])
 }
 
 func TestRoutes_Detailed(t *testing.T) {

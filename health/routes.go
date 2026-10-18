@@ -2,6 +2,7 @@ package health
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"runtime"
 )
@@ -29,9 +30,10 @@ func RegisterRoutes(mux *http.ServeMux, serviceName, version string, svc *Servic
 	mux.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
 		result, err := svc.CheckAll(r.Context())
 		if err != nil {
+			svc.logger.Error("health check failed", slog.String("error", err.Error()))
 			writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
 				KeyStatus: StatusUnhealthy,
-				"error":   err.Error(),
+				"error":   "health check failed",
 			})
 			return
 		}
@@ -45,9 +47,10 @@ func RegisterRoutes(mux *http.ServeMux, serviceName, version string, svc *Servic
 	mux.HandleFunc("GET /health/detailed", func(w http.ResponseWriter, r *http.Request) {
 		result, err := svc.CheckAll(r.Context())
 		if err != nil {
+			svc.logger.Error("health check failed", slog.String("error", err.Error()))
 			writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
 				KeyStatus: StatusUnhealthy,
-				"error":   err.Error(),
+				"error":   "health check failed",
 			})
 			return
 		}

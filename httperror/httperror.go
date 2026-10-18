@@ -8,6 +8,8 @@ import (
 	"github.com/piresc/gokit/apperror"
 )
 
+const msgInternal = "internal server error"
+
 type errorResponse struct {
 	Status    string `json:"status"`
 	Error     string `json:"error"`
@@ -27,5 +29,5 @@ func WriteWithRequestID(w http.ResponseWriter, err error, requestID string) {
 	}
 
 	w.WriteHeader(http.StatusInternalServerError)
-	_ = json.NewEncoder(w).Encode(errorResponse{Status: "error", Error: err.Error(), RequestID: requestID})
+	_ = json.NewEncoder(w).Encode(errorResponse{Status: "error", Error: msgInternal, RequestID: requestID})
 }

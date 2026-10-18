@@ -12,7 +12,6 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `circuitbreaker` | Sony gobreaker wrapper | `New(Config)`, `cb.Execute(fn)` |
 | `config` | Generic Viper-based config loader; merges YAML + env vars | `Load[T](serviceName)`, `Config[T]{Base, Service T}` |
 | `database` | pgx/sqlx Postgres client with tracing | `NewPostgresClient(cfg)`, `client.GetDB()`, `client.Ping(ctx)`, `client.Close()` |
-| `geo` | Great-circle distance between coordinates | `Point{Lat, Lon}`, `DistanceKm(a, b)`, `DistanceM(a, b)` |
 | `grpcclient` | Dial a gRPC backend with OTel tracing | `Dial(ctx, ClientConfig{Target, Tracer, Logger})` |
 | `grpcerror` | Map `apperror` → gRPC status codes | `MapError(err) error` |
 | `grpcmiddleware` | Unary + stream interceptors: auth, logging, tracing, recovery, rate-limit | `NewInterceptors(jwtSecret, log, tracer, redisClient)` |
@@ -31,7 +30,6 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `redislock` | Distributed lock via Redis | `NewLocker(client, cfg)`, `locker.Acquire(ctx, key) (*Lock, error)`, `lock.Release(ctx)` |
 | `response` | Standard JSON response envelope | `Success(w, status, data)`, `Error(w, status, msg)`, `ErrorWithRequestID(w, status, msg, reqID)` |
 | `retry` | Exponential-backoff retry helper | `Do(ctx, cfg, fn)`, `DefaultConfig()` |
-| `semver` | Semantic version parse and compare | `Parse(v)`, `MustParse(v)`, `Compare(v1, v2)`, `LessThan(v1, v2)`, `GreaterThanOrEqual(v1, v2)` |
 | `server` | Graceful HTTP server + shutdown manager | `NewGracefulServer(handler, log, port, timeout)`, `NewShutdownManager(log)` |
 | `telemetry` | Bootstrap OTel SDK (traces + metrics providers) | `Init(ctx, Config) (*Providers, error)`, `providers.Shutdown(ctx)` |
 | `testkit` | Test helpers: containers (Postgres, Redis), JWT / RSA key factories, HTTP client, assertions | `NewPostgresContainer(ctx, migrationFS, dir)`, `NewRedisContainer(ctx)`, `GenerateToken(userID, role, secret)`, `NewRSAKeyPair(t)` |

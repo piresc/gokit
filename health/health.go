@@ -91,7 +91,7 @@ func (s *Service) runChecker(ctx context.Context, name string, checker Checker) 
 
 	if err != nil {
 		depResult[KeyStatus] = StatusUnhealthy
-		depResult["error"] = err.Error()
+		depResult["error"] = "check failed"
 		s.logger.Error("health check failed",
 			slog.String("checker", name),
 			slog.String("error", err.Error()),
