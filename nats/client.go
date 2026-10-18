@@ -10,6 +10,9 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Client wraps a NATS connection with JetStream support.
@@ -103,11 +106,40 @@ func (c *Client) Publish(ctx context.Context, subject string, data []byte, msgID
 		opts = append(opts, jetstream.WithMsgID(msgID))
 	}
 
-	ack, err := c.js.Publish(ctx, subject, data, opts...)
+	msg := nats.NewMsg(subject)
+	msg.Data = data
+
+	var span trace.Span
+	if trace.SpanContextFromContext(ctx).IsValid() {
+		ctx, span = otel.Tracer(tracerName).Start(ctx, subject+" publish",
+			trace.WithSpanKind(trace.SpanKindProducer),
+			messagingAttrs(subject))
+		defer span.End()
+		otel.GetTextMapPropagator().Inject(ctx, natsHeaderCarrier(msg.Header))
+	}
+
+	ack, err := c.js.PublishMsg(ctx, msg, opts...)
 	if err != nil {
+		if span != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
 		return nil, fmt.Errorf("publish to %s: %w", subject, err)
 	}
 	return ack, nil
+}
+
+// ConsumeContext is like Consume but passes handler a context carrying the
+// remote trace context from the message headers, with a consumer span active.
+func (c *Client) ConsumeContext(consumerName string, handler func(ctx context.Context, msg jetstream.Msg)) (jetstream.ConsumeContext, error) {
+	return c.Consume(consumerName, func(msg jetstream.Msg) {
+		ctx := MessageContext(context.Background(), msg)
+		ctx, span := otel.Tracer(tracerName).Start(ctx, msg.Subject()+" process",
+			trace.WithSpanKind(trace.SpanKindConsumer),
+			messagingAttrs(msg.Subject()))
+		defer span.End()
+		handler(ctx, msg)
+	})
 }
 
 // Consume starts consuming messages for consumerName using handler.

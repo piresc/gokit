@@ -24,7 +24,7 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `mail` | SMTP mail sender with provider abstraction | `NewSender(cfg) Sender`, `sender.Send(ctx, to, subject, body)` |
 | `metrics` | OTel metrics — HTTP middleware + gRPC interceptor + Prometheus server | `NewMetrics(service, otlpEndpoint)`, `m.HTTPMiddleware()`, `m.GRPCUnaryInterceptor()` |
 | `middleware` | `net/http` middleware: JWT / RS256 auth, CORS, rate-limit, recovery, security headers, tracing | `NewMiddleware(log, tracer)`, `mw.JWTAuth(secret)`, `mw.RS256Auth(verifier, RS256Options{Revocation, FailOpen})`, `GetClaims(r)`, `mw.RequireRole(roles...)`, `mw.CorsHandler(origins)` |
-| `nats` | NATS JetStream client + typed publisher | `NewClient(url)`, `NewPublisher(client)`, `publisher.Publish(ctx, subject, data, msgID)` |
+| `nats` | NATS JetStream client + typed publisher | `NewClient(url)`, `NewPublisher(client)`, `publisher.Publish(ctx, subject, data, msgID)`, `client.ConsumeContext(name, handler)` |
 | `ratelimit` | Token-bucket rate-limit store (used by middleware) | `NewStore(cfg)`, `store.Allow(key)` |
 | `redis` | go-redis v9 client with OTel tracing | `NewClient(cfg)`, `client.GetClient()`, `client.Close()` |
 | `redislock` | Distributed lock via Redis | `NewLocker(client, cfg)`, `locker.Acquire(ctx, key) (*Lock, error)`, `lock.Release(ctx)` |
