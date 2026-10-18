@@ -1,6 +1,6 @@
 # gokit
 
-Shared infrastructure primitives for Go services. Install with `go get github.com/piresc/gokit@v0.4.0`.
+Shared infrastructure primitives for Go services. Install with `go get github.com/piresc/gokit@v0.5.0`.
 
 ## Package reference
 
@@ -36,6 +36,23 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `tracing` | OTel tracer factory + no-op fallback | `NewTracer(cfg) (Tracer, error)`, `NewNoOpTracer()` |
 
 > **Rate-limit client IP and trusted proxies.** The `middleware` rate limiter only honours `X-Forwarded-For` / `X-Real-IP` when the direct peer is a trusted proxy. The default trusts loopback and private ranges, which suits nginx or Traefik in Docker. When a port is published directly to clients via Docker Desktop, rootless Docker or userland-proxy, every client appears to come from a private gateway address and shares one bucket. In that case set `server.trusted_proxies: ["none"]`, or list the real proxy CIDRs.
+
+## v0.5.0 changes
+
+**Breaking**
+
+- `geo` and `semver` are removed.
+- `ratelimit.Config` now holds a `TrustedProxies []netip.Prefix` slice, so it is no longer comparable with `==`.
+
+**Behaviour changes**
+
+- `httperror` writes "internal server error" for non-`apperror` errors. Health responses say "check failed" and no longer include dependency error text.
+- The rate limiter resolves the client IP only through trusted proxies. The default is private and loopback ranges. Configure with `server.trusted_proxies`; `["none"]` trusts no proxy.
+
+**Additions**
+
+- NATS: `Client.Publish` injects W3C trace context into message headers. The new `Client.ConsumeContext` gives the handler a context with a consumer span.
+- Postgres (otelsql) and Redis (go-redis hook) create child spans automatically, but only under an existing parent span. `TracedPostgresClient` and `TracedRedisClient` are deprecated. bootstrap passes `tracing.exclude_paths` to the tracer, defaulting to `["/health"]`.
 
 ## RS256 auth
 
