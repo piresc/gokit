@@ -145,7 +145,7 @@ func (c *Client) GetJSON(ctx context.Context, endpoint string, result any) error
 		return statusError(resp)
 	}
 
-	return decodeJSON(resp.Body, result)
+	return decodeJSON(resp, result)
 }
 
 // PostJSON performs a POST request with a JSON body and decodes the JSON response into result.
@@ -160,7 +160,7 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, body, result any
 		return statusError(resp)
 	}
 
-	return decodeJSON(resp.Body, result)
+	return decodeJSON(resp, result)
 }
 
 // PutJSON performs a PUT request with a JSON body and decodes the JSON response into result.
@@ -175,26 +175,36 @@ func (c *Client) PutJSON(ctx context.Context, endpoint string, body, result any)
 		return statusError(resp)
 	}
 
-	return decodeJSON(resp.Body, result)
+	return decodeJSON(resp, result)
 }
 
 // APIError is returned when a response carries the error envelope
 // {"success":false,"error":{"code":"ERR_...","message":"..."}}.
 type APIError struct {
-	Code    string
-	Message string
+	StatusCode int
+	Code       string
+	Message    string
 }
 
 func (e *APIError) Error() string {
 	if e.Code == "" {
-		return "API error: " + e.Message
+		return fmt.Sprintf("API error %d: %s", e.StatusCode, e.Message)
 	}
-	return fmt.Sprintf("API error: %s: %s", e.Code, e.Message)
+	return fmt.Sprintf("API error %d: %s: %s", e.StatusCode, e.Code, e.Message)
+}
+
+// statusText returns the HTTP status text without the numeric prefix.
+func statusText(resp *http.Response) string {
+	if text := http.StatusText(resp.StatusCode); text != "" {
+		return text
+	}
+	return strings.TrimSpace(strings.TrimPrefix(resp.Status, fmt.Sprint(resp.StatusCode)))
 }
 
 // envelopeError extracts the APIError from a success:false envelope body.
-// It returns nil when the body is not an error envelope.
-func envelopeError(body []byte) *APIError {
+// It returns nil when the body is not an error envelope. A missing or
+// unparseable error object falls back to the HTTP status text.
+func envelopeError(body []byte, resp *http.Response) *APIError {
 	var raw map[string]json.RawMessage
 	if json.Unmarshal(body, &raw) != nil {
 		return nil
@@ -209,7 +219,7 @@ func envelopeError(body []byte) *APIError {
 	if json.Unmarshal(body, &envelope) != nil || envelope.Success {
 		return nil
 	}
-	apiErr := &APIError{}
+	apiErr := &APIError{StatusCode: resp.StatusCode}
 	var detail struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
@@ -220,6 +230,9 @@ func envelopeError(body []byte) *APIError {
 		// Tolerate a bare string error from older servers.
 		_ = json.Unmarshal(envelope.Error, &apiErr.Message)
 	}
+	if apiErr.Code == "" && apiErr.Message == "" {
+		apiErr.Message = statusText(resp)
+	}
 	return apiErr
 }
 
@@ -228,7 +241,7 @@ func envelopeError(body []byte) *APIError {
 func statusError(resp *http.Response) error {
 	body, err := io.ReadAll(resp.Body)
 	if err == nil {
-		if apiErr := envelopeError(body); apiErr != nil {
+		if apiErr := envelopeError(body, resp); apiErr != nil {
 			return apiErr
 		}
 	}
@@ -238,20 +251,20 @@ func statusError(resp *http.Response) error {
 // decodeJSON tries to decode the response as an API envelope first.
 // Envelope: {"success": bool, "data": ..., "error": {"code": "...", "message": "..."}}.
 // If the body has a "success" field and success is false, an *APIError is returned
-// and the raw body is never decoded into result.
+// and the raw body is never decoded into result (even when result is nil).
 // If the body has no "success" field, a direct unmarshal into result is attempted.
-func decodeJSON(r io.Reader, result any) error {
-	if result == nil {
-		return nil
-	}
-
-	body, err := io.ReadAll(r)
+func decodeJSON(resp *http.Response, result any) error {
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("read response body: %w", err)
 	}
 
-	if apiErr := envelopeError(body); apiErr != nil {
+	if apiErr := envelopeError(body, resp); apiErr != nil {
 		return apiErr
+	}
+
+	if result == nil {
+		return nil
 	}
 
 	// Peek at the top-level keys to detect a success envelope without relying

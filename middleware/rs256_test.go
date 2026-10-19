@@ -116,6 +116,11 @@ func TestRS256Auth(t *testing.T) {
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 	}})
 
+	noSubject := signRS256(t, priv, auth.RSAClaims{RegisteredClaims: jwt.RegisteredClaims{
+		ID:        "no-sub-jti",
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+	}})
+
 	tests := []struct {
 		name       string
 		header     string
@@ -131,6 +136,7 @@ func TestRS256Auth(t *testing.T) {
 		{name: "valid", header: "Bearer " + valid, wantStatus: 200, wantCalled: true},
 		{name: "expired", header: "Bearer " + expired, wantStatus: 401, wantErr: errTokenExpired},
 		{name: "wrong key", header: "Bearer " + wrongKey, wantStatus: 401, wantErr: errAuthRequired},
+		{name: "empty subject", header: "Bearer " + noSubject, wantStatus: 401, wantErr: errAuthRequired},
 		{name: "hs256 alg confusion", header: "Bearer " + hs, wantStatus: 401, wantErr: errAuthRequired},
 		{
 			name: "revoked", header: "Bearer " + valid, wantStatus: 401, wantErr: "ERR_TOKEN_REVOKED: Token has been revoked",

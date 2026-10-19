@@ -80,7 +80,7 @@ func isEmpty(v any) bool {
 	switch rv.Kind() {
 	case reflect.Slice, reflect.Map, reflect.Array, reflect.String:
 		return rv.Len() == 0
-	case reflect.Pointer, reflect.Interface:
+	case reflect.Pointer:
 		return rv.IsNil()
 	case reflect.Bool:
 		return !rv.Bool()

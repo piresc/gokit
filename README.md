@@ -52,6 +52,15 @@ v0.6.0 switches every JSON response to AssetPulse's envelope. This is a breaking
 - The error body has no `data` key. `Content-Type` is `application/json`, and bodies end with a newline.
 - `GET /health` keeps its own probe format. It is not part of the API envelope.
 
+**Exported struct changes**
+
+- `response.SuccessResponse.Status` and `response.ErrorResponse.Status` are removed. The envelope has `success` instead.
+- `response.ErrorResponse.Error` is now of the new type `response.ErrorBody` (`Code`, `Message`) instead of a string.
+
+**`httpclient` errors**
+
+`GetJSON`, `PostJSON` and `PutJSON` now return `*httpclient.APIError` for 4xx/5xx responses (and 2xx responses) that carry a `success:false` envelope. It has `StatusCode`, `Code` and `Message`, and its text is `API error <status>: <code>: <message>`, for example `API error 404: ERR_NOT_FOUND: user not found`. If the envelope has no usable `error` object, `Message` is the HTTP status text. Responses without an envelope still give `HTTP error <status>: <status text>`. Use `errors.As(err, &apiErr)` to inspect it.
+
 **`response.Error` takes a code**
 
 `response.Error(w, status, code, message)` and `response.ErrorWithRequestID(w, status, code, message, requestID)` now require an error code. Use the exported constants or your own `ERR_*` string:

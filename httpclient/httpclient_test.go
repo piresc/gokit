@@ -119,13 +119,75 @@ func TestGetJSON_EnvelopeError(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := NewClient(Config{BaseURL: srv.URL})
-	var result struct{ Success bool }
+	result := map[string]any{}
 	err := c.GetJSON(context.Background(), "/test", &result)
 	var apiErr *APIError
 	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, "ERR_NOT_FOUND", apiErr.Code)
 	assert.Equal(t, "not found", apiErr.Message)
-	assert.False(t, result.Success)
+	assert.Equal(t, 200, apiErr.StatusCode)
+	assert.Empty(t, result, "success:false body must never be decoded into result")
+}
+
+func TestGetJSON_EnvelopeErrorNilResult(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"success":false,"error":{"code":"ERR_X","message":"boom"}}`))
+	}))
+	defer srv.Close()
+	c := NewClient(Config{BaseURL: srv.URL})
+	err := c.GetJSON(context.Background(), "/test", nil)
+	var apiErr *APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, "ERR_X", apiErr.Code)
+}
+
+func TestGetJSON_EnvelopeErrorStatusCode(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"success":false,"error":{"code":"ERR_NOT_FOUND","message":"msg"}}`))
+	}))
+	defer srv.Close()
+	c := NewClient(Config{BaseURL: srv.URL})
+	err := c.GetJSON(context.Background(), "/test", nil)
+	var apiErr *APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, 404, apiErr.StatusCode)
+	assert.Equal(t, "API error 404: ERR_NOT_FOUND: msg", err.Error())
+}
+
+func TestGetJSON_EnvelopeErrorFallsBackToStatusText(t *testing.T) {
+	for name, body := range map[string]string{
+		"missing": `{"success":false}`,
+		"empty":   `{"success":false,"error":{}}`,
+		"invalid": `{"success":false,"error":123}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(body))
+			}))
+			defer srv.Close()
+			c := NewClient(Config{BaseURL: srv.URL})
+			err := c.GetJSON(context.Background(), "/test", nil)
+			var apiErr *APIError
+			require.ErrorAs(t, err, &apiErr)
+			assert.Equal(t, "Bad Request", apiErr.Message)
+			assert.Equal(t, "API error 400: Bad Request", err.Error())
+		})
+	}
+}
+
+func TestGetJSON_StatusErrorBodyReadFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"success":false`))
+	}))
+	defer srv.Close()
+	c := NewClient(Config{BaseURL: srv.URL})
+	err := c.GetJSON(context.Background(), "/test", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "HTTP error 400")
 }
 
 func TestGetJSON_EnvelopeErrorOnHTTPError(t *testing.T) {
