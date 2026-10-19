@@ -3,6 +3,8 @@ package apperror
 import (
 	"errors"
 	"net/http"
+
+	"github.com/piresc/gokit/response"
 )
 
 var (
@@ -38,33 +40,33 @@ func New(code, message string, httpStatus int) *AppError {
 }
 
 func Internal(message string) *AppError {
-	return New("INTERNAL_ERROR", message, http.StatusInternalServerError)
+	return New(response.CodeInternal, message, http.StatusInternalServerError)
 }
 
 func BadRequest(message string) *AppError {
-	return New("BAD_REQUEST", message, http.StatusBadRequest)
+	return New(response.CodeInvalidInput, message, http.StatusBadRequest)
 }
 
 func NotFound(message string) *AppError {
-	return New("NOT_FOUND", message, http.StatusNotFound)
+	return New(response.CodeNotFound, message, http.StatusNotFound)
 }
 
 func Forbidden(message string) *AppError {
-	return New("FORBIDDEN", message, http.StatusForbidden)
+	return New(response.CodeForbidden, message, http.StatusForbidden)
 }
 
 func Conflict(message string) *AppError {
-	return New("CONFLICT", message, http.StatusConflict)
+	return New(response.CodeConflict, message, http.StatusConflict)
 }
 
 func ServiceUnavailable(message string) *AppError {
-	return New("SERVICE_UNAVAILABLE", message, http.StatusServiceUnavailable)
+	return New(response.CodeServiceUnavailable, message, http.StatusServiceUnavailable)
 }
 
 func PaymentFailed(message string) *AppError {
-	return New("PAYMENT_FAILED", message, http.StatusPaymentRequired)
+	return New(response.CodePaymentFailed, message, http.StatusPaymentRequired)
 }
 
 func UnprocessableEntity(message string) *AppError {
-	return New("UNPROCESSABLE_ENTITY", message, http.StatusUnprocessableEntity)
+	return New(response.CodeUnprocessable, message, http.StatusUnprocessableEntity)
 }

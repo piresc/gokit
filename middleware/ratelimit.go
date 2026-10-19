@@ -27,7 +27,7 @@ func (m *Middleware) RateLimiter(cfg RateLimitConfig) func(http.Handler) http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !store.Allow(ClientIP(r, trusted)) {
-				response.Error(w, http.StatusTooManyRequests, "rate limit exceeded")
+				response.Error(w, http.StatusTooManyRequests, response.CodeRateLimited, "Rate limit exceeded")
 				return
 			}
 			next.ServeHTTP(w, r)

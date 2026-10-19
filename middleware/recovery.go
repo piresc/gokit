@@ -41,7 +41,7 @@ func (m *Middleware) RecoveryHandler() func(http.Handler) http.Handler {
 						requestID = r.Header.Get("X-Request-ID")
 					}
 
-					response.ErrorWithRequestID(w, http.StatusInternalServerError, "internal server error", requestID)
+					response.ErrorWithRequestID(w, http.StatusInternalServerError, response.CodeInternal, "Internal server error", requestID)
 				}
 			}()
 			next.ServeHTTP(w, r)

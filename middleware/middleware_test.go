@@ -1,7 +1,6 @@
 package middleware_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -244,7 +243,80 @@ func TestJWTAuth_ErrorBody(t *testing.T) {
 	)
 
 	w := performRequest(h, "GET", "/", nil)
-	var body map[string]interface{}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	assert.Equal(t, "error", body["status"])
+	assert.Equal(t, `{"success":false,"error":{"code":"ERR_UNAUTHORIZED","message":"Authentication required"}}`+"\n", w.Body.String())
+}
+
+func TestJWTAuth_ErrorCodes(t *testing.T) {
+	signed := func(claims jwt.MapClaims) string {
+		tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testSecret))
+		require.NoError(t, err)
+		return tok
+	}
+	expired := signed(jwt.MapClaims{"user_id": "u1", "exp": time.Now().Add(-time.Hour).Unix()})
+	noUser := signed(jwt.MapClaims{"role": "admin", "exp": time.Now().Add(time.Hour).Unix()})
+
+	tests := []struct {
+		name   string
+		header string
+		want   string
+	}{
+		{"missing header", "", errAuthRequired},
+		{"wrong scheme", "Basic something", errAuthRequired},
+		{"garbage token", "Bearer bad.token", errAuthRequired},
+		{"expired", "Bearer " + expired, errTokenExpired},
+		{"missing user identity", "Bearer " + noUser, errAuthRequired},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := chain(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+				newMiddleware().JWTAuth(testSecret),
+			)
+			headers := map[string]string{}
+			if tt.header != "" {
+				headers["Authorization"] = tt.header
+			}
+			w := performRequest(h, "GET", "/", headers)
+			assert.Equal(t, http.StatusUnauthorized, w.Code)
+			assert.Equal(t, tt.want, errCodeMessage(t, w))
+		})
+	}
+}
+
+func TestRequireRole_ErrorBody(t *testing.T) {
+	m := newMiddleware()
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.JWTAuth(testSecret),
+		m.RequireRole("admin"),
+	)
+
+	w := performRequest(h, "GET", "/", map[string]string{"Authorization": "Bearer " + makeToken("u2", "user")})
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Equal(t, "ERR_FORBIDDEN: Insufficient permissions", errCodeMessage(t, w))
+}
+
+func TestRateLimiter_ErrorBody(t *testing.T) {
+	m := newMiddleware()
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }),
+		m.RateLimiter(middleware.RateLimitConfig{RequestsPerSecond: 1, BurstSize: 1}),
+	)
+
+	performRequest(h, "GET", "/", nil) // consume burst
+	w := performRequest(h, "GET", "/", nil)
+	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+	assert.Equal(t, "ERR_RATE_LIMITED: Rate limit exceeded", errCodeMessage(t, w))
+}
+
+func TestRecovery_ErrorBody(t *testing.T) {
+	m := newMiddleware()
+	h := chain(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { panic("test panic") }),
+		m.RecoveryHandler(),
+	)
+
+	w := performRequest(h, "GET", "/panic", map[string]string{"X-Request-ID": "req-1"})
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, `{"success":false,"error":{"code":"ERR_INTERNAL","message":"Internal server error"},"request_id":"req-1"}`+"\n", w.Body.String())
 }

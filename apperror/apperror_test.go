@@ -46,12 +46,14 @@ func TestConstructors(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"Internal", apperror.Internal, 500, "INTERNAL_ERROR"},
-		{"BadRequest", apperror.BadRequest, 400, "BAD_REQUEST"},
-		{"NotFound", apperror.NotFound, 404, "NOT_FOUND"},
-		{"Forbidden", apperror.Forbidden, 403, "FORBIDDEN"},
-		{"Conflict", apperror.Conflict, 409, "CONFLICT"},
-		{"ServiceUnavailable", apperror.ServiceUnavailable, 503, "SERVICE_UNAVAILABLE"},
+		{"Internal", apperror.Internal, 500, "ERR_INTERNAL"},
+		{"BadRequest", apperror.BadRequest, 400, "ERR_INVALID_INPUT"},
+		{"NotFound", apperror.NotFound, 404, "ERR_NOT_FOUND"},
+		{"Forbidden", apperror.Forbidden, 403, "ERR_FORBIDDEN"},
+		{"Conflict", apperror.Conflict, 409, "ERR_CONFLICT"},
+		{"ServiceUnavailable", apperror.ServiceUnavailable, 503, "ERR_SERVICE_UNAVAILABLE"},
+		{"PaymentFailed", apperror.PaymentFailed, 402, "ERR_PAYMENT_FAILED"},
+		{"UnprocessableEntity", apperror.UnprocessableEntity, 422, "ERR_UNPROCESSABLE"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -13,6 +13,11 @@ import (
 
 const defaultRevocationTimeout = time.Second
 
+const (
+	msgAuthRequired = "Authentication required"
+	msgTokenExpired = "Token expired"
+)
+
 // RS256Options configures RS256Auth and OptionalRS256Auth.
 type RS256Options struct {
 	// Revocation checks token IDs (jti) against a revocation list. Nil disables the check.
@@ -52,17 +57,17 @@ func (m *Middleware) rs256(v *auth.RSAVerifier, opts RS256Options, optional bool
 
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || strings.TrimSpace(parts[1]) == "" {
-				response.Error(w, http.StatusUnauthorized, "authentication required")
+				response.Error(w, http.StatusUnauthorized, response.CodeUnauthorized, msgAuthRequired)
 				return
 			}
 
 			claims, err := v.Verify(strings.TrimSpace(parts[1]))
 			if err != nil {
 				if errors.Is(err, auth.ErrTokenExpired) {
-					response.Error(w, http.StatusUnauthorized, "token expired")
+					response.Error(w, http.StatusUnauthorized, response.CodeTokenExpired, msgTokenExpired)
 					return
 				}
-				response.Error(w, http.StatusUnauthorized, "authentication required")
+				response.Error(w, http.StatusUnauthorized, response.CodeUnauthorized, msgAuthRequired)
 				return
 			}
 
@@ -76,11 +81,11 @@ func (m *Middleware) rs256(v *auth.RSAVerifier, opts RS256Options, optional bool
 					} else {
 						m.logger.Error("token revocation check failed", "jti", claims.ID, "error", err)
 						w.Header().Set("Retry-After", "5")
-						response.Error(w, http.StatusServiceUnavailable, "service unavailable")
+						response.Error(w, http.StatusServiceUnavailable, response.CodeServiceUnavailable, "Service unavailable")
 						return
 					}
 				} else if revoked {
-					response.Error(w, http.StatusUnauthorized, "token revoked")
+					response.Error(w, http.StatusUnauthorized, response.CodeTokenRevoked, "Token has been revoked")
 					return
 				}
 			}

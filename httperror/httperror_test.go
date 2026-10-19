@@ -1,7 +1,6 @@
 package httperror_test
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -20,15 +19,9 @@ func TestWrite_AppError(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Errorf("want 404, got %d", w.Code)
 	}
-	var body map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if body["status"] != "error" {
-		t.Errorf("want status=error, got %s", body["status"])
-	}
-	if body["error"] != "user not found" {
-		t.Errorf("want 'user not found', got %s", body["error"])
+	want := `{"success":false,"error":{"code":"ERR_NOT_FOUND","message":"user not found"}}` + "\n"
+	if w.Body.String() != want {
+		t.Errorf("want %q, got %q", want, w.Body.String())
 	}
 }
 
@@ -39,15 +32,9 @@ func TestWrite_NonAppErrorHidesCause(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", w.Code)
 	}
-	var body map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if body["status"] != "error" {
-		t.Errorf("want status=error, got %s", body["status"])
-	}
-	if body["error"] != "internal server error" {
-		t.Errorf("want 'internal server error', got %s", body["error"])
+	want := `{"success":false,"error":{"code":"ERR_INTERNAL","message":"Internal server error"}}` + "\n"
+	if w.Body.String() != want {
+		t.Errorf("want %q, got %q", want, w.Body.String())
 	}
 	if strings.Contains(w.Body.String(), "password") {
 		t.Errorf("body leaks cause: %s", w.Body.String())
@@ -61,12 +48,9 @@ func TestWrite_WrappedAppErrorKeepsMessage(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Errorf("want 404, got %d", w.Code)
 	}
-	var body map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if body["error"] != "user not found" {
-		t.Errorf("want 'user not found', got %s", body["error"])
+	want := `{"success":false,"error":{"code":"ERR_NOT_FOUND","message":"user not found"}}` + "\n"
+	if w.Body.String() != want {
+		t.Errorf("want %q, got %q", want, w.Body.String())
 	}
 }
 
@@ -76,5 +60,18 @@ func TestWrite_GenericError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("want 500, got %d", w.Code)
+	}
+}
+
+func TestWriteWithRequestID(t *testing.T) {
+	w := httptest.NewRecorder()
+	httperror.WriteWithRequestID(w, apperror.Conflict("exists"), "req-9")
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("want 409, got %d", w.Code)
+	}
+	want := `{"success":false,"error":{"code":"ERR_CONFLICT","message":"exists"},"request_id":"req-9"}` + "\n"
+	if w.Body.String() != want {
+		t.Errorf("want %q, got %q", want, w.Body.String())
 	}
 }

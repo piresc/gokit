@@ -142,7 +142,7 @@ func (c *Client) GetJSON(ctx context.Context, endpoint string, result any) error
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
+		return statusError(resp)
 	}
 
 	return decodeJSON(resp.Body, result)
@@ -157,7 +157,7 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, body, result any
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
+		return statusError(resp)
 	}
 
 	return decodeJSON(resp.Body, result)
@@ -172,15 +172,73 @@ func (c *Client) PutJSON(ctx context.Context, endpoint string, body, result any)
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
+		return statusError(resp)
 	}
 
 	return decodeJSON(resp.Body, result)
 }
 
+// APIError is returned when a response carries the error envelope
+// {"success":false,"error":{"code":"ERR_...","message":"..."}}.
+type APIError struct {
+	Code    string
+	Message string
+}
+
+func (e *APIError) Error() string {
+	if e.Code == "" {
+		return "API error: " + e.Message
+	}
+	return fmt.Sprintf("API error: %s: %s", e.Code, e.Message)
+}
+
+// envelopeError extracts the APIError from a success:false envelope body.
+// It returns nil when the body is not an error envelope.
+func envelopeError(body []byte) *APIError {
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(body, &raw) != nil {
+		return nil
+	}
+	if _, ok := raw["success"]; !ok {
+		return nil
+	}
+	var envelope struct {
+		Success bool            `json:"success"`
+		Error   json.RawMessage `json:"error"`
+	}
+	if json.Unmarshal(body, &envelope) != nil || envelope.Success {
+		return nil
+	}
+	apiErr := &APIError{}
+	var detail struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(envelope.Error, &detail) == nil {
+		apiErr.Code, apiErr.Message = detail.Code, detail.Message
+	} else {
+		// Tolerate a bare string error from older servers.
+		_ = json.Unmarshal(envelope.Error, &apiErr.Message)
+	}
+	return apiErr
+}
+
+// statusError builds the error for a 4xx/5xx response, preferring the
+// envelope's code and message over the bare HTTP status.
+func statusError(resp *http.Response) error {
+	body, err := io.ReadAll(resp.Body)
+	if err == nil {
+		if apiErr := envelopeError(body); apiErr != nil {
+			return apiErr
+		}
+	}
+	return fmt.Errorf("HTTP error %d: %s", resp.StatusCode, resp.Status)
+}
+
 // decodeJSON tries to decode the response as an API envelope first.
-// Envelope: {"success": bool, "data": ..., "error": "..."}.
-// If the body has a "success" field and success is false, an error is returned.
+// Envelope: {"success": bool, "data": ..., "error": {"code": "...", "message": "..."}}.
+// If the body has a "success" field and success is false, an *APIError is returned
+// and the raw body is never decoded into result.
 // If the body has no "success" field, a direct unmarshal into result is attempted.
 func decodeJSON(r io.Reader, result any) error {
 	if result == nil {
@@ -192,21 +250,19 @@ func decodeJSON(r io.Reader, result any) error {
 		return fmt.Errorf("read response body: %w", err)
 	}
 
-	// Peek at the top-level keys to detect an envelope without relying on
-	// the zero-value of bool (success=false would be indistinguishable from
-	// a missing field if we decoded directly into a struct).
+	if apiErr := envelopeError(body); apiErr != nil {
+		return apiErr
+	}
+
+	// Peek at the top-level keys to detect a success envelope without relying
+	// on the zero-value of bool.
 	var raw map[string]json.RawMessage
 	if json.Unmarshal(body, &raw) == nil {
 		if _, hasSuccess := raw["success"]; hasSuccess {
 			var envelope struct {
-				Success bool            `json:"success"`
-				Data    json.RawMessage `json:"data"`
-				Error   string          `json:"error"`
+				Data json.RawMessage `json:"data"`
 			}
 			if err := json.Unmarshal(body, &envelope); err == nil {
-				if !envelope.Success {
-					return fmt.Errorf("API error: %s", envelope.Error)
-				}
 				if len(envelope.Data) > 0 {
 					if err := json.Unmarshal(envelope.Data, result); err != nil {
 						return fmt.Errorf("decode JSON response data: %w", err)

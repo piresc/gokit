@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewClient_DefaultTimeout(t *testing.T) {
@@ -114,14 +115,57 @@ func TestDo_ContextCancellation(t *testing.T) {
 func TestGetJSON_EnvelopeError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":false,"error":"not found"}`))
+		_, _ = w.Write([]byte(`{"success":false,"error":{"code":"ERR_NOT_FOUND","message":"not found"}}`))
+	}))
+	defer srv.Close()
+	c := NewClient(Config{BaseURL: srv.URL})
+	var result struct{ Success bool }
+	err := c.GetJSON(context.Background(), "/test", &result)
+	var apiErr *APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, "ERR_NOT_FOUND", apiErr.Code)
+	assert.Equal(t, "not found", apiErr.Message)
+	assert.False(t, result.Success)
+}
+
+func TestGetJSON_EnvelopeErrorOnHTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"success":false,"error":{"code":"ERR_NOT_FOUND","message":"user not found"}}`))
+	}))
+	defer srv.Close()
+	c := NewClient(Config{BaseURL: srv.URL})
+	var result struct{}
+	err := c.GetJSON(context.Background(), "/test", &result)
+	var apiErr *APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, "ERR_NOT_FOUND", apiErr.Code)
+	assert.Contains(t, err.Error(), "user not found")
+}
+
+func TestGetJSON_EnvelopeSuccessOmittedData(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer srv.Close()
+	c := NewClient(Config{BaseURL: srv.URL})
+	var result []string
+	assert.NoError(t, c.GetJSON(context.Background(), "/test", &result))
+	assert.Empty(t, result)
+}
+
+func TestGetJSON_HTTPErrorPlainBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`plain text`))
 	}))
 	defer srv.Close()
 	c := NewClient(Config{BaseURL: srv.URL})
 	var result struct{}
 	err := c.GetJSON(context.Background(), "/test", &result)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.Contains(t, err.Error(), "HTTP error 400")
 }
 
 func TestDo_ContentTypeAndAcceptHeaders(t *testing.T) {

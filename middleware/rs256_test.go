@@ -22,6 +22,11 @@ import (
 	"github.com/piresc/gokit/testkit"
 )
 
+const (
+	errAuthRequired = "ERR_UNAUTHORIZED: Authentication required"
+	errTokenExpired = "ERR_TOKEN_EXPIRED: Token expired"
+)
+
 type countingChecker struct {
 	calls atomic.Int32
 }
@@ -62,10 +67,24 @@ func signRS256(t *testing.T, key *rsa.PrivateKey, claims auth.RSAClaims) string 
 
 func errField(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
-	var body map[string]any
+	return errCodeMessage(t, w)
+}
+
+// errCodeMessage returns the envelope's error as "CODE: message" and checks
+// success is false.
+func errCodeMessage(t *testing.T, w *httptest.ResponseRecorder) string {
+	t.Helper()
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+	var body struct {
+		Success bool `json:"success"`
+		Error   struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	s, _ := body["error"].(string)
-	return s
+	assert.False(t, body.Success)
+	return body.Error.Code + ": " + body.Error.Message
 }
 
 func TestRS256Auth(t *testing.T) {
@@ -106,15 +125,15 @@ func TestRS256Auth(t *testing.T) {
 		wantCalled bool
 		wantRetry  string
 	}{
-		{name: "no header", wantStatus: 401, wantErr: "authentication required"},
-		{name: "basic scheme", header: "Basic abc", wantStatus: 401, wantErr: "authentication required"},
-		{name: "empty bearer", header: "Bearer ", wantStatus: 401, wantErr: "authentication required"},
+		{name: "no header", wantStatus: 401, wantErr: errAuthRequired},
+		{name: "basic scheme", header: "Basic abc", wantStatus: 401, wantErr: errAuthRequired},
+		{name: "empty bearer", header: "Bearer ", wantStatus: 401, wantErr: errAuthRequired},
 		{name: "valid", header: "Bearer " + valid, wantStatus: 200, wantCalled: true},
-		{name: "expired", header: "Bearer " + expired, wantStatus: 401, wantErr: "token expired"},
-		{name: "wrong key", header: "Bearer " + wrongKey, wantStatus: 401, wantErr: "authentication required"},
-		{name: "hs256 alg confusion", header: "Bearer " + hs, wantStatus: 401, wantErr: "authentication required"},
+		{name: "expired", header: "Bearer " + expired, wantStatus: 401, wantErr: errTokenExpired},
+		{name: "wrong key", header: "Bearer " + wrongKey, wantStatus: 401, wantErr: errAuthRequired},
+		{name: "hs256 alg confusion", header: "Bearer " + hs, wantStatus: 401, wantErr: errAuthRequired},
 		{
-			name: "revoked", header: "Bearer " + valid, wantStatus: 401, wantErr: "token revoked",
+			name: "revoked", header: "Bearer " + valid, wantStatus: 401, wantErr: "ERR_TOKEN_REVOKED: Token has been revoked",
 			setup: func(t *testing.T) (auth.RevocationChecker, middleware.RS256Options) {
 				store, _ := newRS256Redis(t)
 				require.NoError(t, store.Revoke(context.Background(), validJTI, time.Minute))
@@ -123,7 +142,7 @@ func TestRS256Auth(t *testing.T) {
 		},
 		{
 			name: "redis closed fail closed", header: "Bearer " + valid, wantStatus: 503,
-			wantErr: "service unavailable", wantRetry: "5",
+			wantErr: "ERR_SERVICE_UNAVAILABLE: Service unavailable", wantRetry: "5",
 			setup: func(t *testing.T) (auth.RevocationChecker, middleware.RS256Options) {
 				store, mr := newRS256Redis(t)
 				mr.Close()
@@ -294,11 +313,11 @@ func TestOptionalRS256Auth(t *testing.T) {
 
 	w, _, _ = run("Bearer " + expired)
 	assert.Equal(t, 401, w.Code)
-	assert.Equal(t, "token expired", errField(t, w))
+	assert.Equal(t, errTokenExpired, errField(t, w))
 
 	w, _, _ = run("Basic abc")
 	assert.Equal(t, 401, w.Code)
-	assert.Equal(t, "authentication required", errField(t, w))
+	assert.Equal(t, errAuthRequired, errField(t, w))
 }
 
 func TestRS256Auth_WithRequireRole(t *testing.T) {

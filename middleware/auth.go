@@ -2,8 +2,11 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/piresc/gokit/auth"
 	"github.com/piresc/gokit/response"
@@ -25,24 +28,28 @@ func (m *Middleware) JWTAuth(secret string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				response.Error(w, http.StatusUnauthorized, "missing authorization header")
+				response.Error(w, http.StatusUnauthorized, response.CodeUnauthorized, msgAuthRequired)
 				return
 			}
 
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-				response.Error(w, http.StatusUnauthorized, "invalid authorization format")
+				response.Error(w, http.StatusUnauthorized, response.CodeUnauthorized, msgAuthRequired)
 				return
 			}
 
 			claims, err := auth.ValidateToken(parts[1], secret)
 			if err != nil {
-				response.Error(w, http.StatusUnauthorized, "invalid or expired token")
+				if errors.Is(err, jwt.ErrTokenExpired) {
+					response.Error(w, http.StatusUnauthorized, response.CodeTokenExpired, msgTokenExpired)
+					return
+				}
+				response.Error(w, http.StatusUnauthorized, response.CodeUnauthorized, msgAuthRequired)
 				return
 			}
 
 			if claims.UserID == "" {
-				response.Error(w, http.StatusUnauthorized, "token missing user identity")
+				response.Error(w, http.StatusUnauthorized, response.CodeUnauthorized, msgAuthRequired)
 				return
 			}
 
@@ -66,7 +73,7 @@ func (m *Middleware) RequireRole(roles ...string) func(http.Handler) http.Handle
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			roleStr, _ := r.Context().Value(KeyRole).(string)
 			if !allowed[roleStr] {
-				response.Error(w, http.StatusForbidden, "insufficient permissions")
+				response.Error(w, http.StatusForbidden, response.CodeForbidden, "Insufficient permissions")
 				return
 			}
 			next.ServeHTTP(w, r)

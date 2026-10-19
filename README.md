@@ -1,6 +1,6 @@
 # gokit
 
-Shared infrastructure primitives for Go services. Install with `go get github.com/piresc/gokit@v0.5.1`.
+Shared infrastructure primitives for Go services. Install with `go get github.com/piresc/gokit@v0.6.0`.
 
 ## Package reference
 
@@ -28,7 +28,7 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `ratelimit` | Token-bucket rate-limit store (used by middleware) | `NewStore(cfg)`, `store.Allow(key)` |
 | `redis` | go-redis v9 client with automatic OTel spans (only under an existing parent span). `TracedRedisClient` is deprecated since v0.5.0 | `NewClient(cfg)`, `client.GetClient()`, `client.Close()` |
 | `redislock` | Distributed lock via Redis | `NewLocker(client, cfg)`, `locker.Acquire(ctx, key) (*Lock, error)`, `lock.Release(ctx)` |
-| `response` | Standard JSON response envelope | `Success(w, status, data)`, `Error(w, status, msg)`, `ErrorWithRequestID(w, status, msg, reqID)` |
+| `response` | Standard JSON response envelope (`{"success":true,"data":...}` / `{"success":false,"error":{"code","message"}}`) and `Code*` constants | `Success(w, status, data)`, `Error(w, status, code, msg)`, `ErrorWithRequestID(w, status, code, msg, reqID)`, `CodeNotFound`, `CodeInvalidInput`, ... |
 | `retry` | Exponential-backoff retry helper | `Do(ctx, cfg, fn)`, `DefaultConfig()` |
 | `server` | Graceful HTTP server + shutdown manager | `NewGracefulServer(handler, log, port, timeout)`, `NewShutdownManager(log)` |
 | `telemetry` | Bootstrap OTel SDK (traces + metrics providers) | `Init(ctx, Config) (*Providers, error)`, `providers.Shutdown(ctx)` |
@@ -36,6 +36,79 @@ Shared infrastructure primitives for Go services. Install with `go get github.co
 | `tracing` | OTel tracer factory + no-op fallback | `NewTracer(cfg) (Tracer, error)`, `NewNoOpTracer()` |
 
 > **Rate-limit client IP and trusted proxies.** The `middleware` rate limiter only honours `X-Forwarded-For` / `X-Real-IP` when the direct peer is a trusted proxy. The default trusts loopback and private ranges, which suits nginx or Traefik in Docker. When a port is published directly to clients via Docker Desktop, rootless Docker or userland-proxy, every client appears to come from a private gateway address and shares one bucket. In that case set `server.trusted_proxies: ["none"]`, or list the real proxy CIDRs.
+
+## Upgrading from v0.5
+
+v0.6.0 switches every JSON response to AssetPulse's envelope. This is a breaking change.
+
+**New format**
+
+```json
+{"success": true, "data": {"id": "1"}}
+{"success": false, "error": {"code": "ERR_NOT_FOUND", "message": "user not found"}}
+```
+
+- The success body omits `data` when it is empty under `encoding/json` `omitempty` rules (nil, empty slice, map or string, nil pointer, `false`, `0`). Zero structs are kept. A `nil` or `[]T{}` payload therefore gives `{"success":true}`.
+- The error body has no `data` key. `Content-Type` is `application/json`, and bodies end with a newline.
+- `GET /health` keeps its own probe format. It is not part of the API envelope.
+
+**`response.Error` takes a code**
+
+`response.Error(w, status, code, message)` and `response.ErrorWithRequestID(w, status, code, message, requestID)` now require an error code. Use the exported constants or your own `ERR_*` string:
+
+| Constant | Value |
+|---|---|
+| `CodeUnauthorized` | `ERR_UNAUTHORIZED` |
+| `CodeTokenExpired` | `ERR_TOKEN_EXPIRED` |
+| `CodeTokenRevoked` | `ERR_TOKEN_REVOKED` |
+| `CodeForbidden` | `ERR_FORBIDDEN` |
+| `CodeInvalidInput` | `ERR_INVALID_INPUT` |
+| `CodeNotFound` | `ERR_NOT_FOUND` |
+| `CodeConflict` | `ERR_CONFLICT` |
+| `CodeRateLimited` | `ERR_RATE_LIMITED` |
+| `CodeInternal` | `ERR_INTERNAL` |
+| `CodeServiceUnavailable` | `ERR_SERVICE_UNAVAILABLE` |
+| `CodePaymentFailed` | `ERR_PAYMENT_FAILED` |
+| `CodeUnprocessable` | `ERR_UNPROCESSABLE` |
+
+**`apperror` codes renamed**
+
+| Constructor | Old code | New code |
+|---|---|---|
+| `Internal` | `INTERNAL_ERROR` | `ERR_INTERNAL` |
+| `BadRequest` | `BAD_REQUEST` | `ERR_INVALID_INPUT` |
+| `NotFound` | `NOT_FOUND` | `ERR_NOT_FOUND` |
+| `Forbidden` | `FORBIDDEN` | `ERR_FORBIDDEN` |
+| `Conflict` | `CONFLICT` | `ERR_CONFLICT` |
+| `ServiceUnavailable` | `SERVICE_UNAVAILABLE` | `ERR_SERVICE_UNAVAILABLE` |
+| `PaymentFailed` | `PAYMENT_FAILED` | `ERR_PAYMENT_FAILED` |
+| `UnprocessableEntity` | `UNPROCESSABLE_ENTITY` | `ERR_UNPROCESSABLE` |
+
+`httperror.Write` now sends the `AppError`'s `Code` and `Message`. Errors that are not an `AppError` give 500 `ERR_INTERNAL` "Internal server error" (capitalised, was "internal server error").
+
+**Middleware messages and codes**
+
+| Middleware | Case | Status | Code | Message |
+|---|---|---|---|---|
+| `RS256Auth`, `OptionalRS256Auth` | missing or malformed header, bad signature, other verify failure | 401 | `ERR_UNAUTHORIZED` | `Authentication required` |
+| `RS256Auth`, `OptionalRS256Auth` | expired | 401 | `ERR_TOKEN_EXPIRED` | `Token expired` |
+| `RS256Auth`, `OptionalRS256Auth` | revoked | 401 | `ERR_TOKEN_REVOKED` | `Token has been revoked` |
+| `RS256Auth`, `OptionalRS256Auth` | revocation check failed, `FailOpen` false | 503, `Retry-After: 5` | `ERR_SERVICE_UNAVAILABLE` | `Service unavailable` |
+| `JWTAuth` | missing or invalid token, missing user identity | 401 | `ERR_UNAUTHORIZED` | `Authentication required` |
+| `JWTAuth` | expired | 401 | `ERR_TOKEN_EXPIRED` | `Token expired` |
+| `RequireRole` | wrong role | 403 | `ERR_FORBIDDEN` | `Insufficient permissions` |
+| `RateLimiter` | over the limit | 429 | `ERR_RATE_LIMITED` | `Rate limit exceeded` |
+| `RecoveryHandler` | panic | 500 | `ERR_INTERNAL` | `Internal server error` |
+
+- `RecoveryHandler` adds a top-level `request_id` to its 500 body when the request carries a `transactionid` or `X-Request-ID` header. AssetPulse never sent this field. It is additional, so existing clients are unaffected.
+- `httpclient` decodes the new envelope. A `success:false` body, or a 4xx/5xx response with one, returns an `*httpclient.APIError` carrying `Code` and `Message`. Plain JSON bodies without a `success` field still decode directly.
+
+**Differences from AssetPulse's old auth package**
+
+When moving AssetPulse onto `RS256Auth`, note that gokit's `FailOpen: true` behaves differently from the old `auth.Middleware` fail-open path. Clients cannot see either difference.
+
+- gokit logs a Warn on every revocation lookup failure when failing open.
+- gokit gives up on the lookup after `RevocationTimeout` (1s by default).
 
 ## v0.5.1 changes
 
