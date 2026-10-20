@@ -2,6 +2,7 @@ package httpclient
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,10 +16,11 @@ import (
 
 // Config holds configuration for the HTTP client.
 type Config struct {
-	BaseURL string
-	APIKey  string
-	Timeout time.Duration
-	Tracer  tracing.Tracer // optional, may be nil
+	BaseURL      string
+	APIKey       string
+	APIKeyHeader string // header carrying APIKey; defaults to "X-API-Key"
+	Timeout      time.Duration
+	Tracer       tracing.Tracer // optional, may be nil
 }
 
 // Client is an HTTP client with retry logic and optional distributed tracing.
@@ -60,7 +62,7 @@ func (c *Client) Do(ctx context.Context, method, endpoint string, body any) (*ht
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	if c.cfg.APIKey != "" {
-		req.Header.Set("X-API-Key", c.cfg.APIKey)
+		req.Header.Set(cmp.Or(c.cfg.APIKeyHeader, "X-API-Key"), c.cfg.APIKey)
 	}
 
 	if c.cfg.Tracer != nil && c.cfg.Tracer.IsEnabled() {

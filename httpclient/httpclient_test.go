@@ -286,3 +286,28 @@ func TestDo_Delete(t *testing.T) {
 	assert.Equal(t, 204, resp.StatusCode)
 	_ = resp.Body.Close()
 }
+
+func TestAPIKeyCustomHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "k", r.Header.Get("x-cg-demo-api-key"))
+		assert.Empty(t, r.Header.Get("X-API-Key"))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	c := NewClient(Config{BaseURL: srv.URL, APIKey: "k", APIKeyHeader: "x-cg-demo-api-key"})
+	resp, err := c.Get(context.Background(), "/test")
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+}
+
+func TestAPIKeyDefaultHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "k", r.Header.Get("X-API-Key"))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	c := NewClient(Config{BaseURL: srv.URL, APIKey: "k"})
+	resp, err := c.Get(context.Background(), "/test")
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+}
